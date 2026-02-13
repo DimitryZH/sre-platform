@@ -118,11 +118,17 @@ The platform is designed for deterministic, repeatable failure tests. A typical 
   - [`charts/platform/values.yaml`](charts/platform/values.yaml)
   - [`charts/platform/templates/deployment.yaml`](charts/platform/templates/deployment.yaml)
 
+- [`argocd/`](argocd/)
+  - [`argocd/apps/frontend.yaml`](argocd/apps/frontend.yaml)
+
+- [`rollouts/`](rollouts/)
+  - [`rollouts/frontend-rollout.yaml`](rollouts/frontend-rollout.yaml)
+
 - [`dashboards/`](dashboards/)
   - [`dashboards/slo-dashboard.json`](dashboards/slo-dashboard.json)
 
 - [`docs/`](docs/)
-  - [`docs/architecture.md`](docs/architecture.md)
+  - [`docs/architecture.md`](docs/architecture.md) – Architecture doc guide for the SLO-driven platform
   - [`docs/load-to-slo-timeline.md`](docs/load-to-slo-timeline.md)
 
 - [`k6/`](k6/)
@@ -136,9 +142,16 @@ The platform is designed for deterministic, repeatable failure tests. A typical 
   - [`observability/slo/frontend-slo.yaml`](observability/slo/frontend-slo.yaml)
   - [`observability/helm/kube-prometheus-stack/values.yaml`](observability/helm/kube-prometheus-stack/values.yaml)
 
+- [`policies/`](policies/)
+  - [`policies/slo_v1.rego`](policies/slo_v1.rego)
+  - [`policies/slo_v2.rego`](policies/slo_v2.rego)
+  - [`policies/slo-policy.yaml`](policies/slo-policy.yaml)
+
 - [`terraform/`](terraform/)
+  - [`terraform/README.md`](terraform/README.md)
   - [`terraform/gke/gke-cluster.tf`](terraform/gke/gke-cluster.tf)
   - [`terraform/gke/node-pools.tf`](terraform/gke/node-pools.tf)
+  - [`terraform/gke/provider.tf`](terraform/gke/provider.tf)
   - [`terraform/gke/variables.tf`](terraform/gke/variables.tf)
   - [`terraform/gke/outputs.tf`](terraform/gke/outputs.tf)
   - [`terraform/monitoring/namespaces.tf`](terraform/monitoring/namespaces.tf)

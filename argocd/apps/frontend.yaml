@@ -1,0 +1,18 @@
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: frontend
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/example/slo-platform
+    targetRevision: HEAD
+    path: helm/services
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: frontend
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

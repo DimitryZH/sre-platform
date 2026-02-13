@@ -2,291 +2,206 @@
 
 ## Overview
 
-The platform is built around **Service Level Objectives (SLOs)** rather than infrastructure metrics.
-Production-grade GitOps observability and release governance platform demonstrating how modern SRE teams safely deliver microservices using SLO-based automated decisions instead of static thresholds.
+This repository implements a GitOps-based SRE platform that governs application releases using **Service Level Objectives (SLOs)** and error budgets instead of raw infrastructure metrics.
 
-This project implements a full delivery lifecycle:
+The platform is designed as a production-grade observability and release-governance example, demonstrating how modern SRE teams can safely deliver microservices using automated, explainable decisions.
 
-Build → Deploy → Observe → Evaluate SLO → Decide → Promote or Rollback
+End-to-end lifecycle:
 
-## Project Goal
+> Build → Deploy → Observe → Evaluate SLO → Decide → Promote or Rollback
 
-Traditional deployments rely on CPU, memory, or error thresholds.
+## Why SLO-driven delivery
 
-Real production systems fail differently.
+Traditional deployments answer questions like **"Is CPU high?"** or **"Is memory above a threshold?"**.
 
-This platform shows how deployments can be governed by Service Level Objectives (SLOs) and error budget consumption, enabling:
+This platform instead focuses on:
 
-safe canary releases
-
-automated rollback
-
-policy-driven release governance
-
-explainable delivery decisions
-## Key Concept
-
-Instead of asking:
-
-“Is CPU high?”
-
-we ask:
-
-“Are users experiencing degraded service quality?”
+- **"Are users experiencing degraded service quality?"**
+- **"How fast are we burning the error budget?"**
 
 Release decisions are based on:
 
-latency SLO
+- Latency SLO
+- Availability SLO
+- Multi-window burn rate
+- Remaining error budget
 
-availability SLO
+This produces delivery behavior that is aligned with user experience, not just infrastructure noise.
 
-multi-window burn rate
+## Core capabilities
 
-remaining error budget
+### GitOps deployment
 
+- ArgoCD-style GitOps workflow for Kubernetes state
+- Helm-based reusable charts
+- Clear separation of configuration and runtime state
 
+### Progressive delivery
 
-## Core Capabilities
-### GitOps Deployment
+- Canary-style rollout strategy
+- Gradual traffic shifting
+- Automatic rollback when SLOs regress
 
-ArgoCD manages all Kubernetes state
+### SLO-driven observability
 
-Helm reusable charts
+- kube-prometheus-stack for metrics, alerting, and dashboards
+- Prometheus recording rules for SLI/SLO computation
+- Grafana dashboards focused on SLOs and error budgets
 
-Environment separation:
+Key SLIs:
 
-dev
+- Latency SLI
+- Error-rate SLI
+- Error-budget tracking over time
 
-stage
+### Multi-window burn rate (Google SRE model)
 
-prod
+Release health is evaluated using multiple time windows, for example:
 
-### Progressive Delivery
+- **Short window** – fast detection of sharp regressions
+- **Long window** – noise protection and resilience to small spikes
 
-Argo Rollouts canary deployments
+This avoids noisy rollbacks while reacting quickly to real incidents.
 
-gradual traffic shifting
+### Policy-as-Code governance
 
-automatic rollback
+Release decisions can be codified as policies, for example using OPA/Rego, to:
 
-### SLO-Driven Observability
+- Gate promotions when SLO risk is detected
+- Block merges when error-budget burn is unsafe
+- Keep release behavior auditable and reviewable as code
 
-kube-prometheus-stack
+### Explainable delivery
 
-Prometheus recording rules
+Each deployment is intended to surface:
 
-Grafana SLO dashboards
+- Current SLO state at release time
+- Burn-rate evaluation
+- Clear decision: **promote** or **rollback**
+- Human-readable explanation for the outcome
 
-Metrics evaluated using:
+### Observability dashboards
 
-latency SLI
+Dashboards emphasize:
 
-error rate SLI
+- Error budget remaining
+- Live burn rate
+- Canary health
+- Release decision flag (GREEN / RED)
+- Rollout progress
 
-error budget tracking
+## Conceptual deployment flow
 
-### Multi-Window Burn Rate (Google SRE Model)
+1. Developer opens a PR
+2. CI builds and pushes container images
+3. GitOps layer syncs desired state to the cluster
+4. Canary rollout begins
+5. Prometheus evaluates SLOs and burn rate
+6. Policy engine evaluates release risk
+7. The system either **promotes** or **rolls back** the release
 
-Release health is evaluated using:
+## Demonstration scenario
 
-short window (fast detection)
+The platform is designed for deterministic, repeatable failure tests. A typical scenario:
 
-long window (noise protection)
+1. Deploy a healthy version of the service
+2. Start synthetic load using k6
+3. Inject latency and/or errors
+4. Observe burn-rate spikes and error-budget consumption
+5. Watch the rollout automatically abort
+6. See merge or promotion blocked when risk is too high
 
-This prevents rollback from short spikes while reacting to real incidents.
+## Repository layout
 
-### Policy-as-Code Governance
+- [`charts/`](charts/)
+  - [`charts/platform/Chart.yaml`](charts/platform/Chart.yaml)
+  - [`charts/platform/values.yaml`](charts/platform/values.yaml)
+  - [`charts/platform/templates/deployment.yaml`](charts/platform/templates/deployment.yaml)
 
-Release decisions are evaluated via:
+- [`dashboards/`](dashboards/)
+  - [`dashboards/slo-dashboard.json`](dashboards/slo-dashboard.json)
 
-OPA (Open Policy Agent)
+- [`docs/`](docs/)
+  - [`docs/architecture.md`](docs/architecture.md)
+  - [`docs/load-to-slo-timeline.md`](docs/load-to-slo-timeline.md)
 
-Rego policies
+- [`k6/`](k6/)
+  - [`k6/k8s-job.yaml`](k6/k8s-job.yaml)
+  - [`k6/chaos-load/checkout-spike.js`](k6/chaos-load/checkout-spike.js)
+  - [`k6/chaos-load/sustained-load.js`](k6/chaos-load/sustained-load.js)
 
-automated GitHub checks
+- [`observability/`](observability/)
+  - [`observability/alerts/burn-rate-alerts.yaml`](observability/alerts/burn-rate-alerts.yaml)
+  - [`observability/slo/checkout-slo.yaml`](observability/slo/checkout-slo.yaml)
+  - [`observability/slo/frontend-slo.yaml`](observability/slo/frontend-slo.yaml)
+  - [`observability/helm/kube-prometheus-stack/values.yaml`](observability/helm/kube-prometheus-stack/values.yaml)
 
-If SLO risk is detected:
+- [`terraform/`](terraform/)
+  - [`terraform/gke/gke-cluster.tf`](terraform/gke/gke-cluster.tf)
+  - [`terraform/gke/node-pools.tf`](terraform/gke/node-pools.tf)
+  - [`terraform/gke/variables.tf`](terraform/gke/variables.tf)
+  - [`terraform/gke/outputs.tf`](terraform/gke/outputs.tf)
+  - [`terraform/monitoring/namespaces.tf`](terraform/monitoring/namespaces.tf)
+  - [`terraform/networking/vpc.tf`](terraform/networking/vpc.tf)
 
- merge is automatically blocked.
+## Engineering principles
 
-### Explainable Delivery
+- GitOps-first operations
+- Immutable artifacts
+- SLOs instead of static thresholds
+- Progressive-delivery safety mechanisms
+- Policy-as-Code governance
+- Observability-driven automation
+- Explainable platform decisions
 
-Every deployment produces:
+## What this project demonstrates
 
-live SLO snapshot
+This repository is intended to showcase practical experience with:
 
-burn rate evaluation
+- DevOps and platform architecture
+- Site Reliability Engineering practices
+- Kubernetes production delivery patterns
+- Observability and SLO design
+- Release-risk management with error budgets
 
-release decision reason
+## Definition of done
 
-Engineers can see why a release failed.
+The platform is considered successful when:
 
-### Observability Dashboards
+- Canary rollouts execute automatically
+- SLO violations trigger rollback without manual intervention
+- Error-budget metrics reflect real user-impacting degradation
+- Git or CI-based gates block risky releases
+- Dashboards clearly explain why a release was promoted or rolled back
 
-Single “killer” dashboard includes:
+## Future extensions (out of scope)
 
-Error Budget Remaining
+Deliberately excluded to keep the example focused:
 
-Live Burn Rate
+- Service mesh integration
+- Multi-cluster or multi-region federation
+- ML-based anomaly detection
+- Custom Kubernetes operators
 
-Canary Health
+## Prerequisites and ecosystem
 
-Release Decision Flag (GREEN / RED)
+This SRE platform consumes immutable container images built and published by separate platforms:
 
-Rollout Progress
+- CI Build Platform – builds and tags container images
+- Container Platform – immutable image registry (for example, Docker Hub)
+- SRE Platform (this repository) – GitOps deployment + SLO governance
 
-## Deployment Lifecycle
-Developer PR
-      ↓
-CI builds image
-      ↓
-ArgoCD sync
-      ↓
-Canary rollout starts
-      ↓
-Prometheus evaluates SLO burn
-      ↓
-OPA policy decision
-      ↓
-✅ Promote OR ❌ Rollback
+Images are built once and then treated as immutable artifacts that flow through the ecosystem:
 
-## Demonstration Scenario
+> CI Build Platform → Container Platform → SRE Platform (GKE)
 
-The platform intentionally supports deterministic failure testing.
-
-You can:
-
-Deploy healthy version
-
-Start k6 load tests
-
-Inject latency/errors
-
-Observe burn rate spike
-
-Watch automatic rollback
-
-See merge blocked in GitHub
-
-## Quick Start (Conceptual)
-make bootstrap   # create cluster + install core stack
-make deploy      # deploy ecommerce services
-make load        # start k6 load
-make break       # trigger SLO violation
-
-
-Expected result:
-
-burn rate increases
-
-error budget drops
-
-rollout aborts automatically
-
-## Repository Structure
-charts/              reusable Helm logic
-environments/        dev / stage / prod configs
-argocd/              GitOps applications
-observability/       Prometheus + Grafana config
-policies/            OPA SLO policies
-docs/
-  architecture.md
-  slo-design.md
-  load-to-slo-timeline.md
-  burn-rate-alerts.md
-
-## Engineering Principles
-
-GitOps-first operations
-
-Immutable artifacts
-
-SLO instead of thresholds
-
-Progressive delivery safety
-
-Policy-as-Code governance
-
-Observability-driven automation
-
-Explainable platform decisions
-
-## What This Project Demonstrates
-
-This repository is designed to showcase practical knowledge of:
-
-DevOps platform architecture
-
-Site Reliability Engineering practices
-
-Kubernetes production delivery
-
-Observability design
-
-Release risk management
-
-## Definition of Done
-
-The platform is successful when:
-
-canary rollout occurs automatically
-
-SLO violation triggers rollback
-
-error budget reflects degradation
-
-GitHub merge is blocked by policy
-
-dashboards clearly explain the decision
-
-## Future Extensions (Out of Scope)
-
-Intentionally excluded:
-
-service mesh
-
-multi-cluster federation
-
-ML anomaly detection
-
-custom Kubernetes operators
-
-
-
-## High-level architecture diagram
-
-
-
-## Prerequisites
-This SRE platform consumes immutable container images produced by the CI Build Platform and stored in the Container Platform. 
-
-
-## Platform Architecture
-
-The ecosystem consists of three independent but connected platforms:
-
-CI Build Platform — builds and tags container images
-
-Container Platform — immutable image registry (Docker Hub)
-
-SRE Platform (this repo) — GitOps deployment + SLO governance
-
-Images are built once and consumed as immutable artifacts.
-
-CI Build Platform → Container Platform → SRE Platform (GKE)
-
-
-# Platform ecosystem
-
-
-
+## Platform ecosystem
 
 The full platform consists of three main components:
 
 - [CI Build Platform](https://github.com/DimitryZH/ci-build-platform)
 - [Container Platform (GitHub)](https://github.com/DimitryZH/container-platform) and [Docker Hub Repository](https://hub.docker.com/u/dmitryzhuravlev)
 - [SRE Platform (this repo)](https://github.com/DimitryZH/ecommerce-observability-platform)
-
 
 ```mermaid
 flowchart LR
@@ -303,3 +218,4 @@ flowchart LR
     style DockerHub fill:#FFF2E5,stroke:#BF5E1E,stroke-width:2px
     style SRE fill:#E5FFE5,stroke:#1EBF2F,stroke-width:2px
 ```
+

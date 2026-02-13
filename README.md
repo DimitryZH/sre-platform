@@ -1,112 +1,305 @@
-#  E-commerce Observability & SRE Platform on GKE
+# SLO-Driven Progressive Delivery Platform
 
-SLO-driven reliability and observability platform for microservices on GKE, focusing on load-induced behavior, burn rate–based alerting, autoscaling, and recovery validation.
+## Overview
 
-This project demonstrates a real-world SRE approach to operating microservices on GKE using Service Level Objectives instead of raw metrics.
+The platform is built around **Service Level Objectives (SLOs)** rather than infrastructure metrics.
+Production-grade GitOps observability and release governance platform demonstrating how modern SRE teams safely deliver microservices using SLO-based automated decisions instead of static thresholds.
+
+This project implements a full delivery lifecycle:
+
+Build → Deploy → Observe → Evaluate SLO → Decide → Promote or Rollback
+
+## Project Goal
+
+Traditional deployments rely on CPU, memory, or error thresholds.
+
+Real production systems fail differently.
+
+This platform shows how deployments can be governed by Service Level Objectives (SLOs) and error budget consumption, enabling:
+
+safe canary releases
+
+automated rollback
+
+policy-driven release governance
+
+explainable delivery decisions
+## Key Concept
+
+Instead of asking:
+
+“Is CPU high?”
+
+we ask:
+
+“Are users experiencing degraded service quality?”
+
+Release decisions are based on:
+
+latency SLO
+
+availability SLO
+
+multi-window burn rate
+
+remaining error budget
 
 
-## Core Pillars
-- GKE production infrastructure (Terraform)
-- Prometheus-based SLO observability
-- k6 load testing inside Kubernetes
-- Error-budget driven alerting and scaling
 
-## Focus areas
-- SLO
-- burn rate
-- load-driven behavior
-- autoscaling
-- recovery
-- GKE
+## Core Capabilities
+### GitOps Deployment
+
+ArgoCD manages all Kubernetes state
+
+Helm reusable charts
+
+Environment separation:
+
+dev
+
+stage
+
+prod
+
+### Progressive Delivery
+
+Argo Rollouts canary deployments
+
+gradual traffic shifting
+
+automatic rollback
+
+### SLO-Driven Observability
+
+kube-prometheus-stack
+
+Prometheus recording rules
+
+Grafana SLO dashboards
+
+Metrics evaluated using:
+
+latency SLI
+
+error rate SLI
+
+error budget tracking
+
+### Multi-Window Burn Rate (Google SRE Model)
+
+Release health is evaluated using:
+
+short window (fast detection)
+
+long window (noise protection)
+
+This prevents rollback from short spikes while reacting to real incidents.
+
+### Policy-as-Code Governance
+
+Release decisions are evaluated via:
+
+OPA (Open Policy Agent)
+
+Rego policies
+
+automated GitHub checks
+
+If SLO risk is detected:
+
+ merge is automatically blocked.
+
+### Explainable Delivery
+
+Every deployment produces:
+
+live SLO snapshot
+
+burn rate evaluation
+
+release decision reason
+
+Engineers can see why a release failed.
+
+### Observability Dashboards
+
+Single “killer” dashboard includes:
+
+Error Budget Remaining
+
+Live Burn Rate
+
+Canary Health
+
+Release Decision Flag (GREEN / RED)
+
+Rollout Progress
+
+## Deployment Lifecycle
+Developer PR
+      ↓
+CI builds image
+      ↓
+ArgoCD sync
+      ↓
+Canary rollout starts
+      ↓
+Prometheus evaluates SLO burn
+      ↓
+OPA policy decision
+      ↓
+✅ Promote OR ❌ Rollback
+
+## Demonstration Scenario
+
+The platform intentionally supports deterministic failure testing.
+
+You can:
+
+Deploy healthy version
+
+Start k6 load tests
+
+Inject latency/errors
+
+Observe burn rate spike
+
+Watch automatic rollback
+
+See merge blocked in GitHub
+
+## Quick Start (Conceptual)
+make bootstrap   # create cluster + install core stack
+make deploy      # deploy ecommerce services
+make load        # start k6 load
+make break       # trigger SLO violation
 
 
-## Prerequisites
-The SRE platform treats container images as immutable artifacts and are consumed from an external CI build system.
-Image tags are pinned to specific Git commit SHAs to guarantee reproducible deployments.
-Container images used in this platform are produced by a dedicated CI build system.
-See my project: [CI Build Platform](https://github.com/DimitryZH/ci-build-platform).
+Expected result:
+
+burn rate increases
+
+error budget drops
+
+rollout aborts automatically
+
+## Repository Structure
+charts/              reusable Helm logic
+environments/        dev / stage / prod configs
+argocd/              GitOps applications
+observability/       Prometheus + Grafana config
+policies/            OPA SLO policies
+docs/
+  architecture.md
+  slo-design.md
+  load-to-slo-timeline.md
+  burn-rate-alerts.md
+
+## Engineering Principles
+
+GitOps-first operations
+
+Immutable artifacts
+
+SLO instead of thresholds
+
+Progressive delivery safety
+
+Policy-as-Code governance
+
+Observability-driven automation
+
+Explainable platform decisions
+
+## What This Project Demonstrates
+
+This repository is designed to showcase practical knowledge of:
+
+DevOps platform architecture
+
+Site Reliability Engineering practices
+
+Kubernetes production delivery
+
+Observability design
+
+Release risk management
+
+## Definition of Done
+
+The platform is successful when:
+
+canary rollout occurs automatically
+
+SLO violation triggers rollback
+
+error budget reflects degradation
+
+GitHub merge is blocked by policy
+
+dashboards clearly explain the decision
+
+## Future Extensions (Out of Scope)
+
+Intentionally excluded:
+
+service mesh
+
+multi-cluster federation
+
+ML anomaly detection
+
+custom Kubernetes operators
+
 
 
 ## High-level architecture diagram
 
 
+
+## Prerequisites
+This SRE platform consumes immutable container images produced by the CI Build Platform and stored in the Container Platform. 
+
+
+## Platform Architecture
+
+The ecosystem consists of three independent but connected platforms:
+
+CI Build Platform — builds and tags container images
+
+Container Platform — immutable image registry (Docker Hub)
+
+SRE Platform (this repo) — GitOps deployment + SLO governance
+
+Images are built once and consumed as immutable artifacts.
+
+CI Build Platform → Container Platform → SRE Platform (GKE)
+
+
+# Platform ecosystem
+
+
+
+
+The full platform consists of three main components:
+
+- [CI Build Platform](https://github.com/DimitryZH/ci-build-platform)
+- [Container Platform (GitHub)](https://github.com/DimitryZH/container-platform) and [Docker Hub Repository](https://hub.docker.com/u/dmitryzhuravlev)
+- [SRE Platform (this repo)](https://github.com/DimitryZH/ecommerce-observability-platform)
+
+
 ```mermaid
-flowchart TB
-    subgraph GCP["Google Cloud Platform"]
-        VPC["Custom VPC"]
-        subgraph GKE["Regional GKE Cluster"]
-            NP1["Default Node Pool </br> (apps / system)"]
-            NP2["Observability Node Pool </br> (Prometheus, Grafana)"]
-            NP3["Chaos Node Pool </br> (k6, chaos jobs)"]
-
-            NS1["namespace: default"]
-            NS2["namespace: observability"]
-            NS3["namespace: chaos-load"]
-        end
-    end
-
-    VPC --> GKE
-    NP1 --> NS1
-    NP2 --> NS2
-    NP3 --> NS3
-```
-
-## Security diagram
-``` mermaid
-sequenceDiagram
-    participant Pod
-    participant KSA as Kubernetes Service Account
-    participant GKE
-    participant GSA as Google Service Account
-    participant GCP_API as GCP APIs
-
-    Pod->>KSA: Uses KSA
-    KSA->>GKE: Bound via Workload Identity
-    GKE->>GSA: Token exchange
-    GSA->>GCP_API: Authenticated request
-    GCP_API-->>Pod: Response
-
-    Note over Pod,GSA: No JSON keys\nNo Kubernetes secrets\nNo static credentials
-```
-
-## Helm boundary vs SLO Control Plane
-
-``` mermaid
 flowchart LR
-    subgraph User
-        Load[Test / Real Traffic]
+    CI[CI Build Platform] -->|Build and Tag Images| DockerHub[Container Platform]
+    DockerHub -->|Provide Images to Deploy| SRE[SRE Platform on GKE]
+
+    subgraph Platforms Ecosystem
+        CI
+        DockerHub
+        SRE
     end
 
-    subgraph Kubernetes Cluster
-        subgraph Workload Layer
-            App[Microservices App<br/>Online Shop app]
-        end
-
-        subgraph Helm Deployment Layer
-            Helm[Helm Charts]
-            Values[values.yaml<br/>Image / Resources / Ports]
-        end
-
-        subgraph SLO Control Plane
-            SLO[SLO Definitions<br/>Latency, Error Rate]
-            Metrics[Prometheus Metrics]
-            Budget[Error Budget Calculator]
-            Policy[Scaling & Policy Engine]
-        end
-
-        subgraph Scaling Layer
-            HPA[K8s HPA / KEDA]
-        end
-    end
-
-    Load --> App
-    Helm --> App
-    Values --> Helm
-
-    App --> Metrics
-    Metrics --> SLO
-    SLO --> Budget
-    Budget --> Policy
-    Policy --> HPA
-    HPA --> App
-```    
+    style CI fill:#E5F2FF,stroke:#1E70BF,stroke-width:2px
+    style DockerHub fill:#FFF2E5,stroke:#BF5E1E,stroke-width:2px
+    style SRE fill:#E5FFE5,stroke:#1EBF2F,stroke-width:2px
+```

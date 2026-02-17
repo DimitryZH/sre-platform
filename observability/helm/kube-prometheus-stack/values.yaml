@@ -1,1 +1,25 @@
-# Tuned values for SLO-driven monitoring
+# Tuned values for SLO-driven monitoring (online-shop).
+#
+# Key goals:
+# - Prometheus must discover ServiceMonitors created by the online-shop charts.
+# - Keep selectors restrictive (avoid scraping random namespaces by default).
+
+prometheus:
+  prometheusSpec:
+    # Only scrape ServiceMonitors explicitly labeled for this Prometheus release.
+    serviceMonitorSelector:
+      matchLabels:
+        release: monitoring
+    # Only look for ServiceMonitors in the online-shop namespace.
+    serviceMonitorNamespaceSelector:
+      matchNames:
+        - online-shop
+
+    # Only load PrometheusRules explicitly labeled for this Prometheus release.
+    ruleSelector:
+      matchLabels:
+        release: monitoring
+    ruleNamespaceSelector:
+      matchNames:
+        - monitoring
+        - online-shop

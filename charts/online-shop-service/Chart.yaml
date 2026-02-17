@@ -1,0 +1,7 @@
+apiVersion: v2
+name: online-shop-service
+description: Generic microservice chart used by the online-shop platform (Deployment + Service)
+type: application
+version: 0.1.0
+appVersion: "v1"
+

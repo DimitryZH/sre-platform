@@ -1,0 +1,61 @@
+frontend:
+  name: frontend
+  replicaCount: 2
+  deployment:
+    # Frontend is managed by Argo Rollouts (Rollout resource), not a Deployment.
+    enabled: false
+  image:
+    repository: dmitryzhuravlev/online-shop-frontend
+    tag: v1
+  monitoring:
+    serviceMonitor:
+      # MUST match `observability/helm/kube-prometheus-stack/values.yaml` serviceMonitorSelector.
+      labels:
+        release: monitoring
+
+cart:
+  name: cart
+  replicaCount: 2
+  image:
+    repository: dmitryzhuravlev/online-shop-cart
+    tag: v1
+  monitoring:
+    serviceMonitor:
+      labels:
+        release: monitoring
+
+checkout:
+  name: checkout
+  replicaCount: 2
+  image:
+    repository: dmitryzhuravlev/online-shop-checkout
+    tag: v1
+  monitoring:
+    serviceMonitor:
+      labels:
+        release: monitoring
+
+payment:
+  name: payment
+  replicaCount: 2
+  image:
+    repository: dmitryzhuravlev/online-shop-payment
+    tag: v1
+  monitoring:
+    serviceMonitor:
+      labels:
+        release: monitoring
+
+# Cross-cutting monitoring configuration used by chart-rendered PrometheusRule objects.
+monitoring:
+  # MUST match the kube-prometheus-stack release name (and its `ruleSelector.matchLabels.release`).
+  releaseLabel: monitoring
+
+global:
+  # Used for default Ingress hosts.
+  domain: obs.example.com
+
+rollouts:
+  analysis:
+    # Prometheus service address inside the cluster.
+    prometheusAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090

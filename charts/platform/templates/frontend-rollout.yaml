@@ -1,0 +1,60 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: frontend
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/part-of: online-shop
+spec:
+  replicas: {{ .Values.frontend.replicaCount | default 2 }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: frontend
+        app.kubernetes.io/part-of: online-shop
+    spec:
+      containers:
+        - name: frontend
+          image: {{ printf "%s:%s" .Values.frontend.image.repository .Values.frontend.image.tag | quote }}
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+  strategy:
+    canary:
+      stableService: frontend
+      canaryService: frontend-canary
+      trafficRouting:
+        nginx:
+          stableIngress: online-shop-frontend
+      steps:
+        - setWeight: 20
+        - analysis:
+            templates:
+              - templateName: online-shop-slo-burnrate
+        - pause:
+            duration: 60
+        - setWeight: 50
+        - analysis:
+            templates:
+              - templateName: online-shop-slo-burnrate
+        - pause:
+            duration: 120
+        - setWeight: 100
+

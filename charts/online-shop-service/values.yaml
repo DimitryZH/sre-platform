@@ -1,0 +1,34 @@
+# Shared defaults for online-shop services.
+
+name: ""
+replicaCount: 2
+
+deployment:
+  enabled: true
+
+image:
+  repository: ""
+  tag: "v1"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+# Prometheus Operator (kube-prometheus-stack) discovery.
+# This chart emits a ServiceMonitor when enabled.
+monitoring:
+  serviceMonitor:
+    enabled: true
+    # Labels used by Prometheus' serviceMonitorSelector.
+    labels:
+      release: monitoring
+    interval: 30s
+    scrapeTimeout: 10s
+    path: /metrics
+
+podLabels: {}
+
+resources: {}
+

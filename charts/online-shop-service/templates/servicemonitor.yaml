@@ -1,0 +1,22 @@
+{{- if .Values.monitoring.serviceMonitor.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ required "values.name is required" .Values.name | quote }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.name | quote }}
+    app.kubernetes.io/part-of: online-shop
+{{- with .Values.monitoring.serviceMonitor.labels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.name | quote }}
+  endpoints:
+    - port: http
+      path: {{ .Values.monitoring.serviceMonitor.path | quote }}
+      interval: {{ .Values.monitoring.serviceMonitor.interval | quote }}
+      scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout | quote }}
+{{- end }}
+

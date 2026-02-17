@@ -1,0 +1,23 @@
+{{- $host := (printf "frontend.%s" (.Values.global.domain | default "example.com")) -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  # This ingress name is referenced by PrometheusRules and by the Rollout trafficRouting.nginx.stableIngress.
+  name: online-shop-frontend
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/part-of: online-shop
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http
+

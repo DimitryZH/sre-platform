@@ -1,0 +1,20 @@
+
+{
+  "title": "Global SLO Dashboard",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Burn Rate (5m)",
+      "targets": [
+        { "expr": "slo:burn_rate_5m" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Burn Rate (1h)",
+      "targets": [
+        { "expr": "slo:burn_rate_1h" }
+      ]
+    }
+  ]
+}

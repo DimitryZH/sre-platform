@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: online-shop-slo-burnrate
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  metrics:
+    - name: burn-rate-fast-and-slow
+      interval: 30s
+      count: 5
+      failureLimit: 1
+      provider:
+        prometheus:
+          address: {{ .Values.rollouts.analysis.prometheusAddress | default "http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090" | quote }}
+          query: |
+            max(
+              (
+                (slo:burn_rate_5m > 14)
+                and
+                (slo:burn_rate_1h > 3)
+              ) or on() vector(0)
+            )
+      # Fail only when BOTH windows indicate high burn (noise protection).
+      failureCondition: result >= 1
+

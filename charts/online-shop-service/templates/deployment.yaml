@@ -1,0 +1,47 @@
+{{- if .Values.deployment.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ required "values.name is required" .Values.name | quote }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.name | quote }}
+    app.kubernetes.io/part-of: online-shop
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.name | quote }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Values.name | quote }}
+        app.kubernetes.io/part-of: online-shop
+{{- with .Values.podLabels }}
+{{ toYaml . | indent 8 }}
+{{- end }}
+    spec:
+      containers:
+        - name: {{ .Values.name | quote }}
+          image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+{{- with .Values.resources }}
+          resources:
+{{ toYaml . | indent 12 }}
+{{- end }}
+{{- end }}
+

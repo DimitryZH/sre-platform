@@ -1,0 +1,44 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: online-shop-burn-rate-alerts
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    release: {{ .Values.monitoring.releaseLabel | default "monitoring" | quote }}
+    app.kubernetes.io/part-of: online-shop
+spec:
+  groups:
+    - name: online-shop.alerts
+      rules:
+        # Multi-window, multi-burn-rate alerting (Google SRE model).
+        #
+        # Rationale:
+        # - Fast window detects sharp regressions quickly.
+        # - Slow window prevents false positives from short spikes.
+        #
+        # This design is also what makes the portfolio proof possible:
+        # - a 5m spike WITHOUT sustained 1h burn does NOT cause paging/rollback.
+        - alert: OnlineShopSLOFastBurnRatePage
+          expr: (slo:burn_rate_5m > 14) and (slo:burn_rate_1h > 3)
+          for: 2m
+          labels:
+            severity: page
+            service: frontend
+          annotations:
+            summary: "online-shop frontend SLO burn is high (page)"
+            description: |
+              Fast burn (5m) and slow burn (1h) both exceed thresholds.
+              burn_rate_5m is above threshold=14 AND burn_rate_1h is above threshold=3.
+
+        - alert: OnlineShopSLOSlowBurnRateTicket
+          expr: (slo:burn_rate_30m > 6) and (slo:burn_rate_6h > 1)
+          for: 15m
+          labels:
+            severity: ticket
+            service: frontend
+          annotations:
+            summary: "online-shop frontend SLO burn is elevated (ticket)"
+            description: |
+              Sustained burn over medium/long windows indicates chronic regression.
+              burn_rate_30m is above threshold=6 AND burn_rate_6h is above threshold=1.
+

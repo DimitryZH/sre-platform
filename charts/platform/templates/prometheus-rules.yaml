@@ -1,0 +1,86 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: online-shop-slo-recording-rules
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    # MUST match kube-prometheus-stack `.Values.prometheus.prometheusSpec.ruleSelector.matchLabels`.
+    release: {{ .Values.monitoring.releaseLabel | default "monitoring" | quote }}
+    app.kubernetes.io/part-of: online-shop
+spec:
+  groups:
+    - name: online-shop.slo
+      rules:
+        # SLO constants.
+        # Objective is 99.9% => error budget = 0.1% (= 0.001).
+        - record: slo:objective
+          expr: vector(0.999)
+
+        - record: slo:error_budget
+          expr: vector(0.001)
+
+        # Frontend availability SLI derived from ingress-nginx.
+        #
+        # Why ingress metrics?
+        # - We don't control app instrumentation in this portfolio repo.
+        # - Ingress gives a stable, user-perceived SLI and matches the planned `make break`
+        #   failure mode (routing a slice of requests to a 500 backend).
+        - record: slo:error_ratio_5m
+          expr: |
+            (
+              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend",status=~"5.."}[5m]))
+              /
+              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend"}[5m]))
+            ) or on() vector(0)
+
+        - record: slo:error_ratio_1h
+          expr: |
+            (
+              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend",status=~"5.."}[1h]))
+              /
+              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend"}[1h]))
+            ) or on() vector(0)
+
+        - record: slo:error_ratio_30m
+          expr: |
+            (
+              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend",status=~"5.."}[30m]))
+              /
+              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend"}[30m]))
+            ) or on() vector(0)
+
+        - record: slo:error_ratio_6h
+          expr: |
+            (
+              sum(increase(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend",status=~"5.."}[6h]))
+              /
+              sum(increase(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend"}[6h]))
+            ) or on() vector(0)
+
+        # Multi-window burn rate (Google SRE model: fast/slow windows).
+        # burn_rate = error_ratio / error_budget
+        - record: slo:burn_rate_5m
+          expr: slo:error_ratio_5m / slo:error_budget
+
+        - record: slo:burn_rate_1h
+          expr: slo:error_ratio_1h / slo:error_budget
+
+        - record: slo:burn_rate_30m
+          expr: slo:error_ratio_30m / slo:error_budget
+
+        - record: slo:burn_rate_6h
+          expr: slo:error_ratio_6h / slo:error_budget
+
+        # Demo-only: error budget remaining over a short window so it visibly changes during `make break`.
+        # This is NOT a canonical 30d error budget; it's a 6h sliding view for the portfolio demo.
+        - record: slo:error_budget_remaining_6h_percent
+          expr: |
+            clamp_max(
+              clamp_min(
+                100 * (1 - (slo:error_ratio_6h / slo:error_budget)),
+                0
+              ),
+              100
+            )
+
+

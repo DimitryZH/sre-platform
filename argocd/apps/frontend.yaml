@@ -2,16 +2,16 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: frontend
+  name: online-shop
 spec:
   project: default
   source:
-    repoURL: https://github.com/example/slo-platform
-    targetRevision: HEAD
-    path: helm/services
+    repoURL: https://github.com/DimitryZH/ecommerce-observability-platform
+    targetRevision: main
+    path: charts/platform
   destination:
     server: https://kubernetes.default.svc
-    namespace: frontend
+    namespace: online-shop
   syncPolicy:
     automated:
       prune: true

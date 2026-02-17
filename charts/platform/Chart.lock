@@ -1,0 +1,15 @@
+dependencies:
+- name: online-shop-service
+  repository: file://../online-shop-service
+  version: 0.1.0
+- name: online-shop-service
+  repository: file://../online-shop-service
+  version: 0.1.0
+- name: online-shop-service
+  repository: file://../online-shop-service
+  version: 0.1.0
+- name: online-shop-service
+  repository: file://../online-shop-service
+  version: 0.1.0
+digest: sha256:09893579eed8a3f2d37f4c98a6f602b1cd9674712ed68b4d321f2d6e3198e346
+generated: "2026-02-17T15:51:46.4471071-05:00"

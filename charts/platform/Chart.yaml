@@ -1,3 +1,23 @@
 apiVersion: v2
 name: platform
+description: Umbrella chart for the online-shop platform (apps + platform glue)
+type: application
 version: 0.1.0
+
+dependencies:
+  - name: online-shop-service
+    alias: frontend
+    version: 0.1.0
+    repository: "file://../online-shop-service"
+  - name: online-shop-service
+    alias: cart
+    version: 0.1.0
+    repository: "file://../online-shop-service"
+  - name: online-shop-service
+    alias: checkout
+    version: 0.1.0
+    repository: "file://../online-shop-service"
+  - name: online-shop-service
+    alias: payment
+    version: 0.1.0
+    repository: "file://../online-shop-service"

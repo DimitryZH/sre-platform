@@ -59,3 +59,9 @@ rollouts:
   analysis:
     # Prometheus service address inside the cluster.
     prometheusAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090
+
+# Deterministic failure injection used by `make break`.
+# Sends requests through the SAME ingress host as real user traffic, so the SLI is user-perceived.
+break:
+  enabled: true
+  image: mccutchen/go-httpbin:v2.14.0

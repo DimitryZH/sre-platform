@@ -8,6 +8,7 @@ metadata:
     release: {{ .Values.monitoring.releaseLabel | default "monitoring" | quote }}
     app.kubernetes.io/part-of: online-shop
 spec:
+  {{- $frontendHost := (printf "frontend.%s" (.Values.global.domain | default "example.com")) -}}
   groups:
     - name: online-shop.slo
       rules:
@@ -28,33 +29,33 @@ spec:
         - record: slo:error_ratio_5m
           expr: |
             (
-              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend",status=~"5.."}[5m]))
+              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",host="{{ $frontendHost }}",status=~"5.."}[5m]))
               /
-              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend"}[5m]))
+              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",host="{{ $frontendHost }}"}[5m]))
             ) or on() vector(0)
 
         - record: slo:error_ratio_1h
           expr: |
             (
-              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend",status=~"5.."}[1h]))
+              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",host="{{ $frontendHost }}",status=~"5.."}[1h]))
               /
-              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend"}[1h]))
+              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",host="{{ $frontendHost }}"}[1h]))
             ) or on() vector(0)
 
         - record: slo:error_ratio_30m
           expr: |
             (
-              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend",status=~"5.."}[30m]))
+              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",host="{{ $frontendHost }}",status=~"5.."}[30m]))
               /
-              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend"}[30m]))
+              sum(rate(nginx_ingress_controller_requests{namespace="online-shop",host="{{ $frontendHost }}"}[30m]))
             ) or on() vector(0)
 
         - record: slo:error_ratio_6h
           expr: |
             (
-              sum(increase(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend",status=~"5.."}[6h]))
+              sum(increase(nginx_ingress_controller_requests{namespace="online-shop",host="{{ $frontendHost }}",status=~"5.."}[6h]))
               /
-              sum(increase(nginx_ingress_controller_requests{namespace="online-shop",ingress="online-shop-frontend"}[6h]))
+              sum(increase(nginx_ingress_controller_requests{namespace="online-shop",host="{{ $frontendHost }}"}[6h]))
             ) or on() vector(0)
 
         # Multi-window burn rate (Google SRE model: fast/slow windows).

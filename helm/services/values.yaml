@@ -1,9 +1,0 @@
-
-name: frontend
-replicaCount: 2
-
-image:
-  # Canonical image prefix: dmitryzhuravlev/online-shop-<service>
-  repository: dmitryzhuravlev/online-shop-frontend
-  # Use an immutable tag in real deployments (pin to a release or digest).
-  tag: v1

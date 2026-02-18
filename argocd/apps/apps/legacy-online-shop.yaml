@@ -1,0 +1,23 @@
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: legacy-online-shop
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/ecommerce-observability-platform
+    targetRevision: main
+    path: charts/platform
+    helm:
+      releaseName: online-shop
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: online-shop
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

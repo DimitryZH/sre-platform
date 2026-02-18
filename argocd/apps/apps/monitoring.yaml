@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  project: default
+  # ArgoCD multi-source application:
+  # - Source 1: upstream chart
+  # - Source 2: this repo, providing the values file
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 65.5.1
+      helm:
+        releaseName: monitoring
+        valueFiles:
+          - $values/observability/helm/kube-prometheus-stack/values.yaml
+    - repoURL: https://github.com/DimitryZH/ecommerce-observability-platform
+      targetRevision: main
+      ref: values
+

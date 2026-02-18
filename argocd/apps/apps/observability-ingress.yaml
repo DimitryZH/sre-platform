@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability-ingress
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/ecommerce-observability-platform
+    targetRevision: main
+    path: observability/ingress
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+

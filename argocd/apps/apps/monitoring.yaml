@@ -27,7 +27,6 @@ spec:
         releaseName: monitoring
         valueFiles:
           - $values/observability/helm/kube-prometheus-stack/values.yaml
-    - repoURL: https://github.com/DimitryZH/ecommerce-observability-platform
+    - repoURL: https://github.com/DimitryZH/sre-platform
       targetRevision: main
       ref: values
-

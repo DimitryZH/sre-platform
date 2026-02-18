@@ -124,10 +124,8 @@ We deploy 4 services:
 Example:
 
 ```bash
-helm install frontend ./helm/services \
-  --set name=frontend \
-  --set image.repository=dmitryzhuravlev/online-shop-frontend \
-  --set image.tag=v1
+helm dependency build charts/platform
+helm upgrade --install online-shop charts/platform -n online-shop
 ```
 
 Repeat for other services.
@@ -145,7 +143,7 @@ kubectl get pods
 Apply rules:
 
 ```bash
-kubectl apply -f monitoring/prometheus/burn-rate-recording-rules.yaml
+kubectl get prometheusrule -A | findstr online-shop
 ```
 
 Port-forward Prometheus:
@@ -176,7 +174,7 @@ Login:
 
 Import:
 
-- `monitoring/grafana/global-slo-dashboard.json`
+- `observability/grafana/global-slo-dashboard.json`
 
 You now see live burn rate panels.
 
@@ -187,7 +185,7 @@ You now see live burn rate panels.
 Apply rollout:
 
 ```bash
-kubectl apply -f rollouts/frontend-rollout.yaml
+kubectl get rollout -n online-shop
 ```
 
 Deploy new version:

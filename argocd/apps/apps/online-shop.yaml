@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/DimitryZH/ecommerce-observability-platform
+    repoURL: https://github.com/DimitryZH/sre-platform
     targetRevision: main
     path: charts/platform
     helm:
@@ -22,4 +22,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-

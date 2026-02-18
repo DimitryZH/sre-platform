@@ -121,11 +121,10 @@ The platform is designed for deterministic, repeatable failure tests. A typical 
 - [`argocd/`](argocd/)
   - [`argocd/apps/frontend.yaml`](argocd/apps/frontend.yaml)
 
-- [`rollouts/`](rollouts/)
-  - [`rollouts/frontend-rollout.yaml`](rollouts/frontend-rollout.yaml)
+- Progressive delivery manifests are packaged in Helm under [`charts/platform/templates/`](charts/platform/templates/frontend-rollout.yaml).
 
-- [`dashboards/`](dashboards/)
-  - [`dashboards/slo-dashboard.json`](dashboards/slo-dashboard.json)
+- [`observability/grafana/`](observability/grafana/)
+  - [`observability/grafana/global-slo-dashboard.json`](observability/grafana/global-slo-dashboard.json)
 
 - [`docs/`](docs/)
   - [`docs/architecture.md`](docs/architecture.md) – Architecture doc guide for the SLO-driven platform
@@ -137,7 +136,6 @@ The platform is designed for deterministic, repeatable failure tests. A typical 
   - [`k6/chaos-load/sustained-load.js`](k6/chaos-load/sustained-load.js)
 
 - [`observability/`](observability/)
-  - [`observability/alerts/burn-rate-alerts.yaml`](observability/alerts/burn-rate-alerts.yaml)
   - [`observability/slo/checkout-slo.yaml`](observability/slo/checkout-slo.yaml)
   - [`observability/slo/frontend-slo.yaml`](observability/slo/frontend-slo.yaml)
   - [`observability/helm/kube-prometheus-stack/values.yaml`](observability/helm/kube-prometheus-stack/values.yaml)

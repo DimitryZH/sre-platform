@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: online-shop
+  annotations:
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: prometheus-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Authentication required"
+
+    # Security: IP allowlist.
+    # Replace with your Cloud NAT egress IP (or CIDR) for the self-hosted GitHub runner.
+    # Default is a TEST-NET address (non-routable) to ensure the endpoint is NOT accidentally public.
+    nginx.ingress.kubernetes.io/whitelist-source-range: "203.0.113.10/32"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: "prometheus.obs.example.com"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: monitoring-kube-prometheus-prometheus
+                port:
+                  number: 9090
+

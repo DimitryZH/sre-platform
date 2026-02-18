@@ -1,0 +1,49 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: online-shop-break-spike
+  namespace: online-shop-load
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: k6
+        app.kubernetes.io/part-of: online-shop
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: k6
+          image: grafana/k6:0.49.0
+          args: ["run", "/scripts/spike.js"]
+          env:
+            - name: BASE_URL
+              value: "http://ingress-nginx-controller.ingress-nginx.svc.cluster.local"
+            - name: HOST
+              value: "frontend.obs.example.com"
+            - name: BREAK_PATH
+              value: "/break"
+            - name: ERROR_RATE
+              value: "0.02"
+            - name: VUS
+              value: "50"
+            - name: DURATION
+              value: "5m"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+      volumes:
+        - name: scripts
+          configMap:
+            name: online-shop-k6-scripts
+

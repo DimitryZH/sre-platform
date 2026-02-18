@@ -1,10 +1,9 @@
 # Terraform — GKE Observability Platform
 
-This Terraform module provisions a **production regional GKE cluster** with:
+This Terraform config provisions a **production regional GKE cluster** with:
 - Workload Identity
 - Cluster autoscaling
 - Dedicated node pools: default, observability, chaos
-- Separate namespaces for observability and chaos workloads
 
  
 ## Architecture
@@ -35,17 +34,18 @@ flowchart TB
 
 ## Folder structure
 ```text
-terraform_modular/
-├── README.md
-├── networking/         # VPC + subnetwork
-├── gke/                # Cluster + Node Pools + variables + provider + outputs
-└── monitoring/         # Kubernetes namespaces + Workload Identity prep
+terraform/
+├── main.tf          # VPC + subnet + GKE cluster + node pools
+├── variables.tf
+├── outputs.tf
+└── README.md
 ```
 ## Deploy
 
 ```bash
 terraform init
-terraform apply
+terraform apply -var "project_id=YOUR_GCP_PROJECT_ID"
 ```
 
+This repo's bootstrap flow uses Terraform only for infra (VPC + GKE). Kubernetes namespaces/apps are managed by Helm/ArgoCD.
 

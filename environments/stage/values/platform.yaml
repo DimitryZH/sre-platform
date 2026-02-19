@@ -1,0 +1,14 @@
+# Placeholder environment overrides for STAGE.
+#
+# IMPORTANT:
+# - These values are NOT currently wired into any Argo CD Application.
+# - Current deployment remains driven by `argocd/apps/root.yaml` -> `argocd/apps/apps/*`.
+# - Keep this file minimal to avoid accidental behavioral changes when env overlays are introduced.
+
+global:
+  # Placeholder namespace value (will be used later when environment roots are introduced).
+  namespace: online-shop-stage
+
+  # Example domain placeholder (will be used later for environment-specific Ingress hosts).
+  domain: stage.example.com
+

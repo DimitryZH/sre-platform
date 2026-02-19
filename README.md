@@ -131,7 +131,10 @@ The platform is designed for deterministic, repeatable failure tests. A typical 
   - [`docs/load-to-slo-timeline.md`](docs/load-to-slo-timeline.md)
 
 - [`k6/`](k6/)
-  - [`k6/k8s-job.yaml`](k6/k8s-job.yaml)
+  - [`k6/k8s-base.yaml`](k6/k8s-base.yaml)
+  - [`k6/job-baseline.yaml`](k6/job-baseline.yaml)
+  - [`k6/job-spike.yaml`](k6/job-spike.yaml)
+  - [`k6/job-sustained.yaml`](k6/job-sustained.yaml)
   - [`k6/chaos-load/checkout-spike.js`](k6/chaos-load/checkout-spike.js)
   - [`k6/chaos-load/sustained-load.js`](k6/chaos-load/sustained-load.js)
 
@@ -147,13 +150,9 @@ The platform is designed for deterministic, repeatable failure tests. A typical 
 
 - [`terraform/`](terraform/)
   - [`terraform/README.md`](terraform/README.md)
-  - [`terraform/gke/gke-cluster.tf`](terraform/gke/gke-cluster.tf)
-  - [`terraform/gke/node-pools.tf`](terraform/gke/node-pools.tf)
-  - [`terraform/gke/provider.tf`](terraform/gke/provider.tf)
-  - [`terraform/gke/variables.tf`](terraform/gke/variables.tf)
-  - [`terraform/gke/outputs.tf`](terraform/gke/outputs.tf)
-  - [`terraform/monitoring/namespaces.tf`](terraform/monitoring/namespaces.tf)
-  - [`terraform/networking/vpc.tf`](terraform/networking/vpc.tf)
+  - [`terraform/main.tf`](terraform/main.tf)
+  - [`terraform/variables.tf`](terraform/variables.tf)
+  - [`terraform/outputs.tf`](terraform/outputs.tf)
 
 ## Engineering principles
 

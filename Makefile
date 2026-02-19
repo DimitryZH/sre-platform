@@ -7,6 +7,31 @@
 #   make bootstrap PROJECT_ID=your-gcp-project
 PROJECT_ID ?=
 
+# Optional environment overlay selection for local rendering/validation.
+# Usage:
+#   make render ENV=dev
+#   make kube-validate ENV=dev
+#   make preflight ENV=dev
+#
+# NOTE: Default behavior (no CLI ENV=...) remains unchanged.
+ENV ?=
+
+# Only enable overlays when ENV is provided on the make command line.
+# This avoids accidental behavior changes if a user's shell exports an ENV variable.
+ENV_EFFECTIVE :=
+ifneq ($(filter command line,$(origin ENV)),)
+  ENV_EFFECTIVE := $(strip $(ENV))
+endif
+
+ifneq ($(ENV_EFFECTIVE),)
+  ifneq ($(filter $(ENV_EFFECTIVE),dev stage prod),$(ENV_EFFECTIVE))
+    $(error ENV must be one of: dev stage prod)
+  endif
+  HELM_TEMPLATE_ARGS := -f environments/$(ENV_EFFECTIVE)/values/platform.yaml
+else
+  HELM_TEMPLATE_ARGS :=
+endif
+
 # Tooling is pinned for deterministic, reproducible preflight checks.
 KUBECONFORM_VERSION ?= v0.6.7
 KUBECONFORM_K8S_VERSION ?= 1.29.0
@@ -20,8 +45,8 @@ check-project:
 preflight:
 	@echo Running preflight checks (safe: no cluster required)
 	@$(MAKE) helm-lint
-	@$(MAKE) render
-	@$(MAKE) kube-validate
+	@$(MAKE) render ENV=$(ENV_EFFECTIVE)
+	@$(MAKE) kube-validate ENV=$(ENV_EFFECTIVE)
 	@$(MAKE) tf-validate
 	@if "$(PROJECT_ID)"=="" (echo SKIP tf-plan: PROJECT_ID not set. Example: make tf-plan PROJECT_ID=my-gcp-project) else ($(MAKE) tf-plan PROJECT_ID=$(PROJECT_ID))
 
@@ -35,7 +60,7 @@ helm-lint:
 render:
 	@echo Rendering charts/platform to _rendered_platform.yaml and _rendered_platform.utf8.yaml (UTF-8, no BOM)
 	helm dependency build charts/platform
-	@powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $enc=New-Object System.Text.UTF8Encoding($false); $nl=[char]10; $out=helm template platform charts/platform; $text=($out -join $nl); if(-not $text.EndsWith($nl)){ $text+=$nl }; [System.IO.File]::WriteAllText('_rendered_platform.yaml',$text,$enc); [System.IO.File]::WriteAllText('_rendered_platform.utf8.yaml',$text,$enc)"
+	@powershell -NoProfile -Command "$$ErrorActionPreference='Stop'; $$enc=New-Object System.Text.UTF8Encoding($$false); $$nl=[char]10; $$out=helm template platform charts/platform $(HELM_TEMPLATE_ARGS); $$text=($$out -join $$nl); if(-not $$text.EndsWith($$nl)){ $$text+=$$nl }; [System.IO.File]::WriteAllText('_rendered_platform.yaml',$$text,$$enc); [System.IO.File]::WriteAllText('_rendered_platform.utf8.yaml',$$text,$$enc)"
 
 # WHY: Lightweight, pinned schema validator download so validation works consistently across dev machines/CI.
 kubeconform-install:

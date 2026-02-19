@@ -5,10 +5,41 @@
 # - Current deployment remains driven by `argocd/apps/root.yaml` -> `argocd/apps/apps/*`.
 # - Keep this file minimal to avoid accidental behavioral changes when env overlays are introduced.
 
+# DEV overlay (Phase 2.3 — Step 4): minimal, realistic overrides for local rendering/validation.
+# This file is intended to be used via:
+#   make render ENV=dev
+#   make preflight ENV=dev
+
 global:
   # Placeholder namespace value (will be used later when environment roots are introduced).
   namespace: online-shop-dev
 
   # Example domain placeholder (will be used later for environment-specific Ingress hosts).
   domain: dev.example.com
+
+# Pin image tags explicitly in dev overlays so rendered output is deterministic.
+frontend:
+  replicaCount: 1
+  image:
+    tag: v1
+
+cart:
+  replicaCount: 1
+  image:
+    tag: v1
+
+checkout:
+  replicaCount: 1
+  image:
+    tag: v1
+
+payment:
+  replicaCount: 1
+  image:
+    tag: v1
+
+# Use the shared Prometheus in the `monitoring` namespace for Rollout analyses.
+rollouts:
+  analysis:
+    prometheusAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090
 

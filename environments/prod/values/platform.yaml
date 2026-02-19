@@ -1,14 +1,12 @@
-# Placeholder environment overrides for PROD.
-#
-# IMPORTANT:
-# - These values are NOT currently wired into any Argo CD Application.
-# - Current deployment remains driven by `argocd/apps/root.yaml` -> `argocd/apps/apps/*`.
-# - Keep this file minimal to avoid accidental behavioral changes when env overlays are introduced.
+## PROD (placeholder)
+##
+## This environment is a placeholder.
+## Monitoring address assumes a future prod monitoring stack.
 
 global:
-  # Placeholder namespace value (will be used later when environment roots are introduced).
   namespace: online-shop-prod
+  domain: obs.example.com
 
-  # Example domain placeholder (will be used later for environment-specific Ingress hosts).
-  domain: prod.example.com
-
+rollouts:
+  analysis:
+    prometheusAddress: http://monitoring-prod-kube-prometheus-prometheus.monitoring-prod.svc:9090

@@ -1,11 +1,66 @@
-.PHONY: bootstrap deploy break break-spike break-sustained break-clean clean terraform-init terraform-apply terraform-destroy kubeconfig helm-bootstrap install-ingress install-argocd install-argo-rollouts argocd-root status
+.PHONY: bootstrap deploy break break-spike break-sustained break-clean clean \
+  check-project preflight helm-lint render kubeconform-install kube-validate \
+  tf-validate tf-plan terraform-init terraform-apply terraform-destroy kubeconfig \
+  helm-bootstrap install-ingress install-argocd install-argo-rollouts argocd-root status
 
 # Set this when running:
 #   make bootstrap PROJECT_ID=your-gcp-project
 PROJECT_ID ?=
 
+# Tooling is pinned for deterministic, reproducible preflight checks.
+KUBECONFORM_VERSION ?= v0.6.7
+KUBECONFORM_K8S_VERSION ?= 1.29.0
+KUBECONFORM_BIN := tools\bin\kubeconform.exe
+KUBECONFORM_URL := https://github.com/yannh/kubeconform/releases/download/$(KUBECONFORM_VERSION)/kubeconform-windows-amd64.zip
+
 check-project:
 	@if "$(PROJECT_ID)"=="" (echo ERROR: PROJECT_ID is required. Example: make bootstrap PROJECT_ID=my-gcp-project & exit /b 1)
+
+# WHY: One local, read-only entrypoint that catches broken Helm/Terraform/YAML before GitOps applies it.
+preflight:
+	@echo Running preflight checks (safe: no cluster required)
+	@$(MAKE) helm-lint
+	@$(MAKE) render
+	@$(MAKE) kube-validate
+	@$(MAKE) tf-validate
+	@if "$(PROJECT_ID)"=="" (echo SKIP tf-plan: PROJECT_ID not set. Example: make tf-plan PROJECT_ID=my-gcp-project) else ($(MAKE) tf-plan PROJECT_ID=$(PROJECT_ID))
+
+# WHY: Prevents broken Helm releases (bad templates/values/dependencies) from reaching ArgoCD.
+helm-lint:
+	@echo Linting Helm charts
+	helm lint charts/platform/
+	helm lint charts/online-shop-service/
+
+# WHY: Produces deterministic rendered manifests for review + schema validation (no cluster required).
+render:
+	@echo Rendering charts/platform to _rendered_platform.yaml and _rendered_platform.utf8.yaml (UTF-8, no BOM)
+	helm dependency build charts/platform
+	@powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $enc=New-Object System.Text.UTF8Encoding($false); $nl=[char]10; $out=helm template platform charts/platform; $text=($out -join $nl); if(-not $text.EndsWith($nl)){ $text+=$nl }; [System.IO.File]::WriteAllText('_rendered_platform.yaml',$text,$enc); [System.IO.File]::WriteAllText('_rendered_platform.utf8.yaml',$text,$enc)"
+
+# WHY: Lightweight, pinned schema validator download so validation works consistently across dev machines/CI.
+kubeconform-install:
+	@if not exist tools\bin (mkdir tools\bin)
+	@if exist $(KUBECONFORM_BIN) (echo kubeconform present: $(KUBECONFORM_BIN)) else (powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $zip='tools/bin/kubeconform.zip'; $url='$(KUBECONFORM_URL)'; Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip; Expand-Archive -Force -Path $zip -DestinationPath 'tools/bin'; Remove-Item $zip -Force")
+
+# WHY: Catches invalid Kubernetes YAML early (API drift, typos, wrong kinds) before cluster apply/ArgoCD sync.
+# NOTE: -ignore-missing-schemas allows CRDs (ArgoCD Application, ServiceMonitor, Rollout) to be validated later.
+kube-validate: kubeconform-install render
+	@echo Validating rendered Helm output + raw manifests with kubeconform (Kubernetes $(KUBECONFORM_K8S_VERSION))
+	@$(KUBECONFORM_BIN) -strict -summary -ignore-missing-schemas -kubernetes-version $(KUBECONFORM_K8S_VERSION) _rendered_platform.utf8.yaml
+	@$(KUBECONFORM_BIN) -strict -summary -ignore-missing-schemas -kubernetes-version $(KUBECONFORM_K8S_VERSION) -recursive argocd/ observability/ingress/
+	@$(KUBECONFORM_BIN) -strict -summary -ignore-missing-schemas -kubernetes-version $(KUBECONFORM_K8S_VERSION) k6/k8s-base.yaml k6/job-baseline.yaml k6/job-spike.yaml k6/job-sustained.yaml
+
+# WHY: Prevents Terraform formatting/syntax/provider config errors from breaking deployments and CI.
+tf-validate:
+	@echo Validating Terraform (fmt/init/validate) in ./terraform
+	cd terraform && terraform fmt -check
+	cd terraform && terraform init -backend=false -input=false
+	cd terraform && terraform validate
+
+# WHY: Dry-run safe infra preview (no refresh) to catch variable wiring and unexpected diffs before apply.
+tf-plan: check-project tf-validate
+	@echo Creating Terraform plan (dry-run safe: -refresh=false) in ./terraform/tfplan
+	cd terraform && terraform plan -refresh=false -input=false -var "project_id=$(PROJECT_ID)" -out=tfplan
 
 terraform-init: check-project
 	@echo Initializing Terraform in ./terraform

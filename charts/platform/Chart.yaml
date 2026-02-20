@@ -3,6 +3,7 @@ name: platform
 description: Umbrella chart for the online-shop platform (apps + platform glue)
 type: application
 version: 0.1.0
+appVersion: "v1.0.0"
 
 dependencies:
   - name: online-shop-service

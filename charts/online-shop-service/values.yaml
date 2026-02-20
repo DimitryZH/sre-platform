@@ -8,7 +8,7 @@ deployment:
 
 image:
   repository: ""
-  tag: "v1"
+  tag: ""
   pullPolicy: IfNotPresent
 
 service:
@@ -31,4 +31,14 @@ monitoring:
 podLabels: {}
 
 resources: {}
+
+configmap:
+  create: true
+  data:
+    FEATURE_FLAG_NEW_CHECKOUT: "false"
+
+secret:
+  create: true
+  data:
+    DATABASE_PASSWORD: "changeme"
 

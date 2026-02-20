@@ -6,7 +6,7 @@ frontend:
     enabled: false
   image:
     repository: dmitryzhuravlev/online-shop-frontend
-    tag: v1
+    tag: ""
   monitoring:
     serviceMonitor:
       # MUST match `observability/helm/kube-prometheus-stack/values.yaml` serviceMonitorSelector.
@@ -18,7 +18,7 @@ cart:
   replicaCount: 2
   image:
     repository: dmitryzhuravlev/online-shop-cart
-    tag: v1
+    tag: ""
   monitoring:
     serviceMonitor:
       labels:
@@ -29,7 +29,7 @@ checkout:
   replicaCount: 2
   image:
     repository: dmitryzhuravlev/online-shop-checkout
-    tag: v1
+    tag: ""
   monitoring:
     serviceMonitor:
       labels:
@@ -40,7 +40,7 @@ payment:
   replicaCount: 2
   image:
     repository: dmitryzhuravlev/online-shop-payment
-    tag: v1
+    tag: ""
   monitoring:
     serviceMonitor:
       labels:

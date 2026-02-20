@@ -1,0 +1,20 @@
+prometheus:
+  prometheusSpec:
+    # Keep selectors aligned with observability/helm/kube-prometheus-stack/values.yaml
+    serviceMonitorSelector:
+      matchLabels:
+        release: monitoring
+    serviceMonitorNamespaceSelector:
+      matchNames:
+        - online-shop-dev
+        - online-shop-stage
+
+    ruleSelector:
+      matchLabels:
+        release: monitoring
+    ruleNamespaceSelector:
+      matchNames:
+        - monitoring
+        - online-shop-dev
+        - online-shop-stage
+

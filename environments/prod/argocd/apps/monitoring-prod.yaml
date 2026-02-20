@@ -1,0 +1,33 @@
+# Prod monitoring placeholder (manual sync).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-prod
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring-prod
+  syncPolicy:
+    # Intentionally manual for now (no syncPolicy.automated).
+    syncOptions:
+      - CreateNamespace=true
+  # ArgoCD multi-source application:
+  # - Source 1: upstream chart
+  # - Source 2: this repo, providing the values file(s)
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 65.5.1
+      helm:
+        releaseName: monitoring-prod
+        valueFiles:
+          - $values/observability/helm/kube-prometheus-stack/values.yaml
+          - $values/environments/prod/values/kube-prometheus-stack-prod.yaml
+    - repoURL: https://github.com/DimitryZH/sre-platform
+      targetRevision: main
+      ref: values
+

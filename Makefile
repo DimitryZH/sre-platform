@@ -65,14 +65,14 @@ render:
 # WHY: Lightweight, pinned schema validator download so validation works consistently across dev machines/CI.
 kubeconform-install:
 	@if not exist tools\bin (mkdir tools\bin)
-	@if exist $(KUBECONFORM_BIN) (echo kubeconform present: $(KUBECONFORM_BIN)) else (powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $zip='tools/bin/kubeconform.zip'; $url='$(KUBECONFORM_URL)'; Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip; Expand-Archive -Force -Path $zip -DestinationPath 'tools/bin'; Remove-Item $zip -Force")
+	@if exist $(KUBECONFORM_BIN) (echo kubeconform present: $(KUBECONFORM_BIN)) else (powershell -NoProfile -Command "$$ErrorActionPreference='Stop'; $$zip='tools/bin/kubeconform.zip'; $$url='$(KUBECONFORM_URL)'; Invoke-WebRequest -UseBasicParsing -Uri $$url -OutFile $$zip; Expand-Archive -Force -Path $$zip -DestinationPath 'tools/bin'; Remove-Item $$zip -Force")
 
 # WHY: Catches invalid Kubernetes YAML early (API drift, typos, wrong kinds) before cluster apply/ArgoCD sync.
 # NOTE: -ignore-missing-schemas allows CRDs (ArgoCD Application, ServiceMonitor, Rollout) to be validated later.
 kube-validate: kubeconform-install render
 	@echo Validating rendered Helm output + raw manifests with kubeconform (Kubernetes $(KUBECONFORM_K8S_VERSION))
 	@$(KUBECONFORM_BIN) -strict -summary -ignore-missing-schemas -kubernetes-version $(KUBECONFORM_K8S_VERSION) _rendered_platform.utf8.yaml
-	@$(KUBECONFORM_BIN) -strict -summary -ignore-missing-schemas -kubernetes-version $(KUBECONFORM_K8S_VERSION) -recursive argocd/ observability/ingress/
+	@$(KUBECONFORM_BIN) -strict -summary -ignore-missing-schemas -kubernetes-version $(KUBECONFORM_K8S_VERSION) argocd/ observability/ingress/
 	@$(KUBECONFORM_BIN) -strict -summary -ignore-missing-schemas -kubernetes-version $(KUBECONFORM_K8S_VERSION) k6/k8s-base.yaml k6/job-baseline.yaml k6/job-spike.yaml k6/job-sustained.yaml
 
 # WHY: Prevents Terraform formatting/syntax/provider config errors from breaking deployments and CI.

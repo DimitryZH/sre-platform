@@ -1,12 +1,12 @@
-## PROD (placeholder)
-##
-## This environment is a placeholder.
-## Monitoring address assumes a future prod monitoring stack.
-
+# PROD overlay
 global:
   namespace: online-shop-prod
-  domain: obs.example.com
+  domain: example.com
+
+# High availability for Production
+frontend:
+  replicaCount: 3
 
 rollouts:
   analysis:
-    prometheusAddress: http://monitoring-prod-kube-prometheus-prometheus.monitoring-prod.svc:9090
+    prometheusAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090

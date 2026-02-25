@@ -5,17 +5,15 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: online-shop
+    env: stage
 spec:
   project: default
-  # Stage overlay, uses env valueFiles for GitOps promotion testing
   destination:
     server: https://kubernetes.default.svc
     namespace: online-shop-stage
   syncPolicy:
-    # Intentionally manual for now (no syncPolicy.automated) to prevent accidental deployment.
     syncOptions:
       - CreateNamespace=true
-  # ArgoCD multi-source to keep valueFiles stable via $values/... (no fragile ../../ paths).
   sources:
     - repoURL: https://github.com/DimitryZH/sre-platform
       targetRevision: main
@@ -23,9 +21,7 @@ spec:
       helm:
         releaseName: online-shop-stage
         valueFiles:
-          # $values/... corresponds to environments/stage/values/platform.yaml (i.e., environments/<env>/values/platform.yaml).
           - $values/environments/stage/values/platform.yaml
     - repoURL: https://github.com/DimitryZH/sre-platform
       targetRevision: main
       ref: values
-

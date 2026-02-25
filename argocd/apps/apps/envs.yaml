@@ -1,0 +1,60 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: bootstrap-dev
+  namespace: argocd
+  labels:
+    env: dev
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/sre-platform
+    targetRevision: main
+    path: environments/dev/argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: bootstrap-stage
+  namespace: argocd
+  labels:
+    env: stage
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/sre-platform
+    targetRevision: main
+    path: environments/stage/argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    # Manual sync for Stage
+    automated: null
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: bootstrap-prod
+  namespace: argocd
+  labels:
+    env: prod
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/sre-platform
+    targetRevision: main
+    path: environments/prod/argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    # Manual sync for Prod
+    automated: null

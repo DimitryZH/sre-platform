@@ -14,6 +14,9 @@ prometheus:
     serviceMonitorNamespaceSelector:
       matchNames:
         - online-shop
+        - online-shop-dev
+        - online-shop-stage
+        - online-shop-prod
 
     # Only load PrometheusRules explicitly labeled for this Prometheus release.
     ruleSelector:
@@ -23,3 +26,6 @@ prometheus:
       matchNames:
         - monitoring
         - online-shop
+        - online-shop-dev
+        - online-shop-stage
+        - online-shop-prod

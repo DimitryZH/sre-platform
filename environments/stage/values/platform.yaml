@@ -1,11 +1,11 @@
-## STAGE (placeholder)
-##
-## This environment is a placeholder used for promotion testing.
-## It is intentionally minimal to avoid accidental behavioral changes.
-
+# STAGE overlay
 global:
   namespace: online-shop-stage
   domain: stage.example.com
+
+# In Stage, we might want to test specific tags, but generally mirror prod.
+frontend:
+  replicaCount: 2
 
 rollouts:
   analysis:

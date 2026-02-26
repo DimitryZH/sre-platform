@@ -1,4 +1,8 @@
+/kube-prometheus-stack
+deployment.md
+GEMINI.md
 /_rendered_platform.yaml
 /_rendered_platform.utf8.yaml
 /tools/bin/
 /terraform/tfplan
+kube-prometheus-stack-65.5.1.tgz

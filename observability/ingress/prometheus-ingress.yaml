@@ -13,7 +13,7 @@ metadata:
     # Security: IP allowlist.
     # Replace with your Cloud NAT egress IP (or CIDR) for the self-hosted GitHub runner.
     # Default is a TEST-NET address (non-routable) to ensure the endpoint is NOT accidentally public.
-    nginx.ingress.kubernetes.io/whitelist-source-range: "203.0.113.10/32"
+    # nginx.ingress.kubernetes.io/whitelist-source-range: "203.0.113.10/32"
 spec:
   ingressClassName: nginx
   rules:
@@ -27,4 +27,3 @@ spec:
                 name: monitoring-kube-prometheus-prometheus
                 port:
                   number: 9090
-

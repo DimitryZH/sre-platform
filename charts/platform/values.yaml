@@ -3,7 +3,7 @@ frontend:
   replicaCount: 2
   deployment:
     # Frontend is managed by Argo Rollouts (Rollout resource), not a Deployment.
-    enabled: false
+    enabled: true
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-frontend
     tag: "v0.10.4"

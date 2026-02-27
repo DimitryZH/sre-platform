@@ -4,6 +4,8 @@ frontend:
   deployment:
     # Frontend is managed by Argo Rollouts (Rollout resource), not a Deployment.
     enabled: true
+  rollouts:
+    enabled: false
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-frontend
     tag: "v0.10.4"
@@ -57,9 +59,6 @@ global:
 
 rollouts:
   enabled: false
-  analysis:
-    # Prometheus service address inside the cluster.
-    prometheusAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090
 
 # Deterministic failure injection used by `make break`.
 # Sends requests through the SAME ingress host as real user traffic, so the SLI is user-perceived.

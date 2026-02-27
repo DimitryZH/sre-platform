@@ -40,6 +40,4 @@ payment:
 
 # Use the shared Prometheus in the `monitoring` namespace for Rollout analyses.
 rollouts:
-  analysis:
-    prometheusAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090
-
+  enabled: false

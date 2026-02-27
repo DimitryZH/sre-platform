@@ -22,3 +22,35 @@ dependencies:
     alias: payment
     version: 0.1.0
     repository: "file://../online-shop-service"
+  - name: online-shop-service
+    alias: adservice
+    version: 0.1.0
+    repository: "file://../online-shop-service"
+  - name: online-shop-service
+    alias: currencyservice
+    version: 0.1.0
+    repository: "file://../online-shop-service"
+  - name: online-shop-service
+    alias: emailservice
+    version: 0.1.0
+    repository: "file://../online-shop-service"
+  - name: online-shop-service
+    alias: loadgenerator
+    version: 0.1.0
+    repository: "file://../online-shop-service"
+  - name: online-shop-service
+    alias: productcatalogservice
+    version: 0.1.0
+    repository: "file://../online-shop-service"
+  - name: online-shop-service
+    alias: recommendationservice
+    version: 0.1.0
+    repository: "file://../online-shop-service"
+  - name: online-shop-service
+    alias: redis
+    version: 0.1.0
+    repository: "file://../online-shop-service"
+  - name: online-shop-service
+    alias: shippingservice
+    version: 0.1.0
+    repository: "file://../online-shop-service"

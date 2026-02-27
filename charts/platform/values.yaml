@@ -67,41 +67,89 @@ break:
   image: mccutchen/go-httpbin:v2.14.0
 
 adservice:
+  name: adservice
+  replicaCount: 2
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-adservice
     tag: "v0.10.4"
+  monitoring:
+    serviceMonitor:
+      labels:
+        release: monitoring
 
 currencyservice:
+  name: currencyservice
+  replicaCount: 2
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-currencyservice
     tag: "v0.10.4"
+  monitoring:
+    serviceMonitor:
+      labels:
+        release: monitoring
 
 emailservice:
+  name: emailservice
+  replicaCount: 2
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-emailservice
     tag: "v0.10.4"
+  monitoring:
+    serviceMonitor:
+      labels:
+        release: monitoring
 
 loadgenerator:
+  name: loadgenerator
+  replicaCount: 2
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-loadgenerator
     tag: "v0.10.4"
+  monitoring:
+    serviceMonitor:
+      labels:
+        release: monitoring
 
 productcatalogservice:
+  name: productcatalogservice
+  replicaCount: 2
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-productcatalogservice
     tag: "v0.10.4"
+  monitoring:
+    serviceMonitor:
+      labels:
+        release: monitoring
 
 recommendationservice:
+  name: recommendationservice
+  replicaCount: 2
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-recommendationservice
     tag: "v0.10.4"
+  monitoring:
+    serviceMonitor:
+      labels:
+        release: monitoring
 
 redis:
+  name: redis
+  replicaCount: 2
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-redis-cart
     tag: "7-alpine"
+  monitoring:
+    serviceMonitor:
+      labels:
+        release: monitoring
 
 shippingservice:
+  name: shippingservice
+  replicaCount: 2
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-shippingservice
     tag: "v0.10.4"
+  monitoring:
+    serviceMonitor:
+      labels:
+        release: monitoring

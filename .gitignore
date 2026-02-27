@@ -6,3 +6,5 @@ GEMINI.md
 /tools/bin/
 /terraform/tfplan
 kube-prometheus-stack-65.5.1.tgz
+
+troubleshooting.md

@@ -5,8 +5,8 @@ frontend:
     # Frontend is managed by Argo Rollouts (Rollout resource), not a Deployment.
     enabled: false
   image:
-    repository: dmitryzhuravlev/online-shop-frontend
-    tag: ""
+    repository: docker.io/dmitryzhuravlev/online-shop-frontend
+    tag: "v0.10.4"
   monitoring:
     serviceMonitor:
       # MUST match `observability/helm/kube-prometheus-stack/values.yaml` serviceMonitorSelector.
@@ -17,8 +17,8 @@ cart:
   name: cart
   replicaCount: 2
   image:
-    repository: dmitryzhuravlev/online-shop-cart
-    tag: ""
+    repository: docker.io/dmitryzhuravlev/online-shop-cartservice
+    tag: "v0.10.4"
   monitoring:
     serviceMonitor:
       labels:
@@ -28,8 +28,8 @@ checkout:
   name: checkout
   replicaCount: 2
   image:
-    repository: dmitryzhuravlev/online-shop-checkout
-    tag: ""
+    repository: docker.io/dmitryzhuravlev/online-shop-checkoutservice
+    tag: "v0.10.4"
   monitoring:
     serviceMonitor:
       labels:
@@ -39,8 +39,8 @@ payment:
   name: payment
   replicaCount: 2
   image:
-    repository: dmitryzhuravlev/online-shop-payment
-    tag: ""
+    repository: docker.io/dmitryzhuravlev/online-shop-paymentservice
+    tag: "v0.10.4"
   monitoring:
     serviceMonitor:
       labels:
@@ -65,3 +65,43 @@ rollouts:
 break:
   enabled: true
   image: mccutchen/go-httpbin:v2.14.0
+
+adservice:
+  image:
+    repository: docker.io/dmitryzhuravlev/online-shop-adservice
+    tag: "v0.10.4"
+
+currencyservice:
+  image:
+    repository: docker.io/dmitryzhuravlev/online-shop-currencyservice
+    tag: "v0.10.4"
+
+emailservice:
+  image:
+    repository: docker.io/dmitryzhuravlev/online-shop-emailservice
+    tag: "v0.10.4"
+
+loadgenerator:
+  image:
+    repository: docker.io/dmitryzhuravlev/online-shop-loadgenerator
+    tag: "v0.10.4"
+
+productcatalogservice:
+  image:
+    repository: docker.io/dmitryzhuravlev/online-shop-productcatalogservice
+    tag: "v0.10.4"
+
+recommendationservice:
+  image:
+    repository: docker.io/dmitryzhuravlev/online-shop-recommendationservice
+    tag: "v0.10.4"
+
+redis:
+  image:
+    repository: docker.io/dmitryzhuravlev/online-shop-redis-cart
+    tag: "7-alpine"
+
+shippingservice:
+  image:
+    repository: docker.io/dmitryzhuravlev/online-shop-shippingservice
+    tag: "v0.10.4"

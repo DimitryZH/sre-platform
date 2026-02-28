@@ -21,7 +21,9 @@ spec:
           port: 8080
         rollouts:
           enabled: true
+          name: frontend
           analysis:
+            name: online-shop-slo-burnrate
             prometheusAddress: http://prometheus-operated.monitoring:9090
   destination:
     server: https://kubernetes.default.svc

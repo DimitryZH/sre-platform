@@ -19,6 +19,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 9555
+        rollouts:
+          analysis:
+            prometheusAddress: http://prometheus-operated.monitoring:9090
   destination:
     server: https://kubernetes.default.svc
     namespace: prod
@@ -50,6 +53,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 7070
+        rollouts:
+          analysis:
+            prometheusAddress: http://prometheus-operated.monitoring:9090
   destination:
     server: https://kubernetes.default.svc
     namespace: prod
@@ -81,6 +87,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 5050
+        rollouts:
+          analysis:
+            prometheusAddress: http://prometheus-operated.monitoring:9090
   destination:
     server: https://kubernetes.default.svc
     namespace: prod
@@ -112,6 +121,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 7000
+        rollouts:
+          analysis:
+            prometheusAddress: http://prometheus-operated.monitoring:9090
   destination:
     server: https://kubernetes.default.svc
     namespace: prod
@@ -143,6 +155,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 5000
+        rollouts:
+          analysis:
+            prometheusAddress: http://prometheus-operated.monitoring:9090
   destination:
     server: https://kubernetes.default.svc
     namespace: prod
@@ -174,6 +189,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 50051
+        rollouts:
+          analysis:
+            prometheusAddress: http://prometheus-operated.monitoring:9090
   destination:
     server: https://kubernetes.default.svc
     namespace: prod
@@ -205,6 +223,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 3550
+        rollouts:
+          analysis:
+            prometheusAddress: http://prometheus-operated.monitoring:9090
   destination:
     server: https://kubernetes.default.svc
     namespace: prod
@@ -236,6 +257,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 8080
+        rollouts:
+          analysis:
+            prometheusAddress: http://prometheus-operated.monitoring:9090
   destination:
     server: https://kubernetes.default.svc
     namespace: prod
@@ -267,6 +291,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 50051
+        rollouts:
+          analysis:
+            prometheusAddress: http://prometheus-operated.monitoring:9090
   destination:
     server: https://kubernetes.default.svc
     namespace: prod
@@ -298,6 +325,9 @@ spec:
           tag: "7-alpine"
         service:
           port: 6379
+        rollouts:
+          analysis:
+            prometheusAddress: http://prometheus-operated.monitoring:9090
   destination:
     server: https://kubernetes.default.svc
     namespace: prod

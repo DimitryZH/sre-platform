@@ -1,27 +1,29 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: online-shop
+  name: online-shop-dev
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: online-shop
 spec:
   project: default
   source:
-    repoURL: https://github.com/DimitryZH/sre-platform
+    repoURL: 'https://github.com/DimitryZH/sre-platform'
+    path: 'charts/platform'
     targetRevision: main
-    path: charts/platform
     helm:
-      releaseName: online-shop
+      releaseName: online-shop-dev
       values: |
         image:
           repository: docker.io/dmitryzhuravlev/online-shop-frontend
           tag: "v0.10.4"
+        replicaCount: 1
         service:
+          type: ClusterIP
           port: 8080
   destination:
-    server: https://kubernetes.default.svc
-    namespace: prod
+    server: 'https://kubernetes.default.svc'
+    namespace: dev
   syncPolicy:
     automated:
       prune: true

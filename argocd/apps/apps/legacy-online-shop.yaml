@@ -12,6 +12,12 @@ spec:
     path: charts/platform
     helm:
       releaseName: online-shop
+      values: |
+        image:
+          repository: docker.io/dmitryzhuravlev/online-shop-frontend
+          tag: "v0.10.4"
+        service:
+          port: 8080
   destination:
     server: https://kubernetes.default.svc
     namespace: online-shop

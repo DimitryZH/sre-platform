@@ -1,0 +1,309 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: adservice
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/sre-platform
+    targetRevision: main
+    path: charts/platform
+    helm:
+      releaseName: adservice
+      values: |
+        image:
+          repository: docker.io/dmitryzhuravlev/online-shop-adservice
+          tag: "v0.10.4"
+        service:
+          port: 9555
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cartservice
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/sre-platform
+    targetRevision: main
+    path: charts/platform
+    helm:
+      releaseName: cartservice
+      values: |
+        image:
+          repository: docker.io/dmitryzhuravlev/online-shop-cartservice
+          tag: "v0.10.4"
+        service:
+          port: 7070
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: checkoutservice
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/sre-platform
+    targetRevision: main
+    path: charts/platform
+    helm:
+      releaseName: checkoutservice
+      values: |
+        image:
+          repository: docker.io/dmitryzhuravlev/online-shop-checkoutservice
+          tag: "v0.10.4"
+        service:
+          port: 5050
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: currencyservice
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/sre-platform
+    targetRevision: main
+    path: charts/platform
+    helm:
+      releaseName: currencyservice
+      values: |
+        image:
+          repository: docker.io/dmitryzhuravlev/online-shop-currencyservice
+          tag: "v0.10.4"
+        service:
+          port: 7000
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: emailservice
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/sre-platform
+    targetRevision: main
+    path: charts/platform
+    helm:
+      releaseName: emailservice
+      values: |
+        image:
+          repository: docker.io/dmitryzhuravlev/online-shop-emailservice
+          tag: "v0.10.4"
+        service:
+          port: 5000
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: paymentservice
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/sre-platform
+    targetRevision: main
+    path: charts/platform
+    helm:
+      releaseName: paymentservice
+      values: |
+        image:
+          repository: docker.io/dmitryzhuravlev/online-shop-paymentservice
+          tag: "v0.10.4"
+        service:
+          port: 50051
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: productcatalogservice
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/sre-platform
+    targetRevision: main
+    path: charts/platform
+    helm:
+      releaseName: productcatalogservice
+      values: |
+        image:
+          repository: docker.io/dmitryzhuravlev/online-shop-productcatalogservice
+          tag: "v0.10.4"
+        service:
+          port: 3550
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: recommendationservice
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/sre-platform
+    targetRevision: main
+    path: charts/platform
+    helm:
+      releaseName: recommendationservice
+      values: |
+        image:
+          repository: docker.io/dmitryzhuravlev/online-shop-recommendationservice
+          tag: "v0.10.4"
+        service:
+          port: 8080
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shippingservice
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/sre-platform
+    targetRevision: main
+    path: charts/platform
+    helm:
+      releaseName: shippingservice
+      values: |
+        image:
+          repository: docker.io/dmitryzhuravlev/online-shop-shippingservice
+          tag: "v0.10.4"
+        service:
+          port: 50051
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: redis-cart
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DimitryZH/sre-platform
+    targetRevision: main
+    path: charts/platform
+    helm:
+      releaseName: redis-cart
+      values: |
+        image:
+          repository: docker.io/dmitryzhuravlev/online-shop-redis-cart
+          tag: "7-alpine"
+        service:
+          port: 6379
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

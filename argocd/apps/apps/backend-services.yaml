@@ -19,9 +19,10 @@ spec:
           tag: "v0.10.4"
         service:
           port: 9555
-        env:
-          PORT: "9555"
-          PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+        deployment:
+          env:
+            PORT: "9555"
+            PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
         rollouts:
           enabled: false
           analysis:
@@ -57,9 +58,10 @@ spec:
           tag: "v0.10.4"
         service:
           port: 7070
-        env:
-          PORT: "7070"
-          REDIS_ADDR: "redis-cart:6379"
+        deployment:
+          env:
+            PORT: "7070"
+            REDIS_ADDR: "redis-cart:6379"
         rollouts:
           enabled: false
           analysis:
@@ -95,14 +97,15 @@ spec:
           tag: "v0.10.4"
         service:
           port: 5050
-        env:
-          PORT: "5050"
-          PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
-          SHIPPING_SERVICE_ADDR: "shippingservice:50051"
-          PAYMENT_SERVICE_ADDR: "paymentservice:50051"
-          EMAIL_SERVICE_ADDR: "emailservice:5000"
-          CURRENCY_SERVICE_ADDR: "currencyservice:7000"
-          CART_SERVICE_ADDR: "cartservice:7070"
+        deployment:
+          env:
+            PORT: "5050"
+            PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+            SHIPPING_SERVICE_ADDR: "shippingservice:50051"
+            PAYMENT_SERVICE_ADDR: "paymentservice:50051"
+            EMAIL_SERVICE_ADDR: "emailservice:5000"
+            CURRENCY_SERVICE_ADDR: "currencyservice:7000"
+            CART_SERVICE_ADDR: "cartservice:7070"
         rollouts:
           enabled: false
           analysis:
@@ -138,8 +141,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 7000
-        env:
-          PORT: "7000"
+        deployment:
+          env:
+            PORT: "7000"
         rollouts:
           enabled: false
           analysis:
@@ -175,8 +179,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 5000
-        env:
-          PORT: "5000"
+        deployment:
+          env:
+            PORT: "5000"
         rollouts:
           enabled: false
           analysis:
@@ -212,8 +217,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 50051
-        env:
-          PORT: "50051"
+        deployment:
+          env:
+            PORT: "50051"
         rollouts:
           enabled: false
           analysis:
@@ -249,8 +255,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 3550
-        env:
-          PORT: "3550"
+        deployment:
+          env:
+            PORT: "3550"
         rollouts:
           enabled: false
           analysis:
@@ -286,9 +293,10 @@ spec:
           tag: "v0.10.4"
         service:
           port: 8080
-        env:
-          PORT: "8080"
-          PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+        deployment:
+          env:
+            PORT: "8080"
+            PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
         rollouts:
           enabled: false
           analysis:
@@ -324,8 +332,9 @@ spec:
           tag: "v0.10.4"
         service:
           port: 50051
-        env:
-          PORT: "50051"
+        deployment:
+          env:
+            PORT: "50051"
         rollouts:
           enabled: false
           analysis:
@@ -361,9 +370,10 @@ spec:
           tag: "v0.10.4"
         service:
           port: 8080
-        env:
-          FRONTEND_ADDR: "online-shop:8080"
-          USERS: "10"
+        deployment:
+          env:
+            FRONTEND_ADDR: "online-shop:8080"
+            USERS: "10"
         rollouts:
           enabled: false
           analysis:

@@ -20,10 +20,8 @@ spec:
         service:
           port: 9555
         env:
-          - name: PORT
-            value: "9555"
-          - name: PRODUCT_CATALOG_SERVICE_ADDR
-            value: "productcatalogservice:3550"
+          PORT: "9555"
+          PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
         rollouts:
           enabled: false
           analysis:
@@ -60,10 +58,8 @@ spec:
         service:
           port: 7070
         env:
-          - name: PORT
-            value: "7070"
-          - name: REDIS_ADDR
-            value: "redis-cart:6379"
+          PORT: "7070"
+          REDIS_ADDR: "redis-cart:6379"
         rollouts:
           enabled: false
           analysis:
@@ -100,20 +96,13 @@ spec:
         service:
           port: 5050
         env:
-          - name: PORT
-            value: "5050"
-          - name: PRODUCT_CATALOG_SERVICE_ADDR
-            value: "productcatalogservice:3550"
-          - name: SHIPPING_SERVICE_ADDR
-            value: "shippingservice:50051"
-          - name: PAYMENT_SERVICE_ADDR
-            value: "paymentservice:50051"
-          - name: EMAIL_SERVICE_ADDR
-            value: "emailservice:5000"
-          - name: CURRENCY_SERVICE_ADDR
-            value: "currencyservice:7000"
-          - name: CART_SERVICE_ADDR
-            value: "cartservice:7070"
+          PORT: "5050"
+          PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+          SHIPPING_SERVICE_ADDR: "shippingservice:50051"
+          PAYMENT_SERVICE_ADDR: "paymentservice:50051"
+          EMAIL_SERVICE_ADDR: "emailservice:5000"
+          CURRENCY_SERVICE_ADDR: "currencyservice:7000"
+          CART_SERVICE_ADDR: "cartservice:7070"
         rollouts:
           enabled: false
           analysis:
@@ -150,8 +139,7 @@ spec:
         service:
           port: 7000
         env:
-          - name: PORT
-            value: "7000"
+          PORT: "7000"
         rollouts:
           enabled: false
           analysis:
@@ -188,8 +176,7 @@ spec:
         service:
           port: 5000
         env:
-          - name: PORT
-            value: "5000"
+          PORT: "5000"
         rollouts:
           enabled: false
           analysis:
@@ -226,8 +213,7 @@ spec:
         service:
           port: 50051
         env:
-          - name: PORT
-            value: "50051"
+          PORT: "50051"
         rollouts:
           enabled: false
           analysis:
@@ -264,8 +250,7 @@ spec:
         service:
           port: 3550
         env:
-          - name: PORT
-            value: "3550"
+          PORT: "3550"
         rollouts:
           enabled: false
           analysis:
@@ -302,10 +287,8 @@ spec:
         service:
           port: 8080
         env:
-          - name: PORT
-            value: "8080"
-          - name: PRODUCT_CATALOG_SERVICE_ADDR
-            value: "productcatalogservice:3550"
+          PORT: "8080"
+          PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
         rollouts:
           enabled: false
           analysis:
@@ -342,8 +325,7 @@ spec:
         service:
           port: 50051
         env:
-          - name: PORT
-            value: "50051"
+          PORT: "50051"
         rollouts:
           enabled: false
           analysis:
@@ -380,10 +362,8 @@ spec:
         service:
           port: 8080
         env:
-          - name: FRONTEND_ADDR
-            value: "online-shop:8080"
-          - name: USERS
-            value: "10"
+          FRONTEND_ADDR: "online-shop:8080"
+          USERS: "10"
         rollouts:
           enabled: false
           analysis:

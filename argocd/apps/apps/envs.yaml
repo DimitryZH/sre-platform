@@ -6,6 +6,7 @@ metadata:
   labels:
     env: dev
 spec:
+  # Canonical dev path: environment app set under environments/dev/argocd/apps.
   project: default
   source:
     repoURL: https://github.com/DimitryZH/sre-platform

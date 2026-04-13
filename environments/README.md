@@ -1,15 +1,16 @@
 # Environments
 
-This directory is a **non-breaking skeleton** for future environment-specific overlays (dev / stage / prod).
+This directory holds environment-specific overlays (dev / stage / prod).
 
 ## Purpose
 
-Each environment will eventually have its own:
+Each environment has its own:
 
 - `values/` overrides (for Helm values that should vary per environment)
 - `argocd/apps/` root(s) (environment-specific Argo CD Application manifests)
 
-For now, these are **placeholders only** and are not referenced by Argo CD.
+Current root expansion references environment bootstrap apps from `argocd/apps/apps/envs.yaml`.
+The dev environment path is the first canonical deployment target.
 
 ## Promotion model
 
@@ -21,7 +22,9 @@ The intended flow is:
 
 The long-term goal is to keep the structure consistent across environments so promotion is primarily a Git change moving through directories rather than rewriting manifests.
 
-## Current deployment is unchanged
+## Current deployment entrypoint
 
-The current deployment entrypoint remains [`argocd/apps/root.yaml`](argocd/apps/root.yaml:1), which still points at the existing app-of-apps tree under `argocd/apps/apps/`.
+The deployment entrypoint remains `argocd/apps/root.yaml`, which expands
+`argocd/apps/apps/` and includes environment bootstrap apps.
+Dev is automated via `bootstrap-dev`; stage/prod remain manual bootstrap paths.
 

@@ -59,7 +59,7 @@ helm-lint:
 # WHY: Produces deterministic rendered manifests for review + schema validation (no cluster required).
 render:
 	@echo Rendering charts/platform to _rendered_platform.yaml and _rendered_platform.utf8.yaml (UTF-8, no BOM)
-	helm dependency build charts/platform
+	@powershell -NoProfile -Command "$$ErrorActionPreference='Stop'; $$helmTmp=Join-Path $$env:TEMP 'sre-platform-helm'; $$cache=Join-Path $$helmTmp 'cache'; $$repoCfg=Join-Path $$helmTmp 'repositories.yaml'; New-Item -ItemType Directory -Force $$cache | Out-Null; Set-Content -LiteralPath $$repoCfg -Value \"apiVersion: v1`nrepositories: []\" -NoNewline; $$env:HELM_REPOSITORY_CONFIG=$$repoCfg; $$env:HELM_REPOSITORY_CACHE=$$cache; helm dependency build charts/platform --skip-refresh"
 	@powershell -NoProfile -Command "$$ErrorActionPreference='Stop'; $$enc=New-Object System.Text.UTF8Encoding($$false); $$nl=[char]10; $$out=helm template platform charts/platform $(HELM_TEMPLATE_ARGS); $$text=($$out -join $$nl); if(-not $$text.EndsWith($$nl)){ $$text+=$$nl }; [System.IO.File]::WriteAllText('_rendered_platform.yaml',$$text,$$enc); [System.IO.File]::WriteAllText('_rendered_platform.utf8.yaml',$$text,$$enc)"
 
 # WHY: Lightweight, pinned schema validator download so validation works consistently across dev machines/CI.

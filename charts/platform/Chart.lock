@@ -11,5 +11,29 @@ dependencies:
 - name: online-shop-service
   repository: file://../online-shop-service
   version: 0.1.0
-digest: sha256:09893579eed8a3f2d37f4c98a6f602b1cd9674712ed68b4d321f2d6e3198e346
-generated: "2026-02-17T15:51:46.4471071-05:00"
+- name: online-shop-service
+  repository: file://../online-shop-service
+  version: 0.1.0
+- name: online-shop-service
+  repository: file://../online-shop-service
+  version: 0.1.0
+- name: online-shop-service
+  repository: file://../online-shop-service
+  version: 0.1.0
+- name: online-shop-service
+  repository: file://../online-shop-service
+  version: 0.1.0
+- name: online-shop-service
+  repository: file://../online-shop-service
+  version: 0.1.0
+- name: online-shop-service
+  repository: file://../online-shop-service
+  version: 0.1.0
+- name: online-shop-service
+  repository: file://../online-shop-service
+  version: 0.1.0
+- name: online-shop-service
+  repository: file://../online-shop-service
+  version: 0.1.0
+digest: sha256:b8386e371de8c6bf29ee67a937f0036365668dd76dbc95bfc34eaaaed3cff25b
+generated: "2026-04-13T12:35:42.4168095-04:00"

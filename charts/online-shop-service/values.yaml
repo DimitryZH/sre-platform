@@ -42,3 +42,8 @@ secret:
   data:
     DATABASE_PASSWORD: "changeme"
 
+# Optional workload identity service account.
+serviceAccount:
+  create: false
+  gcpServiceAccount: ""
+

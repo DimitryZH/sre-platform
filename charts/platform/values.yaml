@@ -59,6 +59,9 @@ global:
 
 rollouts:
   enabled: false
+  analysis:
+    # Default Prometheus endpoint used by rollout analysis templates.
+    prometheusAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090
 
 # Deterministic failure injection used by `make break`.
 # Sends requests through the SAME ingress host as real user traffic, so the SLI is user-perceived.

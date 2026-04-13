@@ -4,6 +4,12 @@ metadata:
   name: online-shop-slo-burnrate
   labels:
     app.kubernetes.io/part-of: online-shop
+{{- $prometheusAddress := "http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090" -}}
+{{- with .Values.rollouts }}
+{{- with .analysis }}
+{{- $prometheusAddress = (.prometheusAddress | default $prometheusAddress) -}}
+{{- end }}
+{{- end }}
 spec:
   metrics:
     - name: burn-rate-fast-and-slow
@@ -12,7 +18,7 @@ spec:
       failureLimit: 1
       provider:
         prometheus:
-          address: {{ .Values.rollouts.analysis.prometheusAddress | default "http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090" | quote }}
+          address: {{ $prometheusAddress | quote }}
           query: |
             max(
               (

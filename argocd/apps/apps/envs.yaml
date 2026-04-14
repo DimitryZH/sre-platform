@@ -1,3 +1,5 @@
+# Transitional non-dev bootstrap manifests.
+# Not included by the canonical root expansion (see argocd/apps/root.yaml include filter).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

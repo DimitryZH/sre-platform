@@ -8,8 +8,8 @@ metadata:
     release: {{ .Values.monitoring.releaseLabel | default "monitoring" | quote }}
     app.kubernetes.io/part-of: online-shop
 spec:
-  {{- $releaseNs := .Release.Namespace -}}
-  {{- $frontendHost := (printf "frontend.%s" (.Values.global.domain | default "example.com")) -}}
+  {{ $releaseNs := .Release.Namespace }}
+  {{ $frontendHost := (printf "frontend.%s" (.Values.global.domain | default "example.com")) }}
   groups:
     - name: online-shop.slo
       rules:

@@ -1,20 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: online-shop-platform
+  name: bootstrap-dev
   namespace: argocd
   labels:
-    app.kubernetes.io/part-of: online-shop
+    env: dev
 spec:
+  # Canonical dev path: environment app set under environments/dev/argocd/apps.
   project: default
   source:
     repoURL: https://github.com/DimitryZH/sre-platform
     targetRevision: main
-    path: argocd/apps/apps
-    directory:
-      recurse: true
-      # Canonical first-deploy path: include only the dev bootstrap app.
-      include: envs-dev.yaml
+    path: environments/dev/argocd/apps
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
@@ -22,4 +19,3 @@ spec:
     automated:
       prune: true
       selfHeal: true
-

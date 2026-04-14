@@ -124,7 +124,7 @@ install-argo-rollouts: helm-bootstrap
 	@echo Installing Argo Rollouts
 	helm upgrade --install argo-rollouts argo/argo-rollouts -n argo-rollouts --create-namespace
 	@echo Waiting for Argo Rollouts controller to be ready
-	kubectl -n argo-rollouts rollout status deploy/argo-rollouts-argo-rollouts --timeout=10m
+	kubectl -n argo-rollouts rollout status deploy/argo-rollouts --timeout=10m
 
 argocd-root:
 	@echo Applying ArgoCD root app-of-apps

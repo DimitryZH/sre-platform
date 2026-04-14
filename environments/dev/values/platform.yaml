@@ -1,42 +1,39 @@
-# Placeholder environment overrides for DEV.
+# DEV environment overlay (canonical first deployment target).
+# This file is wired via:
+#   argocd/apps/root.yaml -> argocd/apps/apps/envs.yaml -> bootstrap-dev
+#   -> environments/dev/argocd/apps/online-shop-dev.yaml
 #
-# IMPORTANT:
-# - These values are NOT currently wired into any Argo CD Application.
-# - Current deployment remains driven by `argocd/apps/root.yaml` -> `argocd/apps/apps/*`.
-# - Keep this file minimal to avoid accidental behavioral changes when env overlays are introduced.
-
-# DEV overlay (Phase 2.3 — Step 4): minimal, realistic overrides for local rendering/validation.
-# This file is intended to be used via:
+# It is also used for local validation:
 #   make render ENV=dev
 #   make preflight ENV=dev
 
 global:
-  # Placeholder namespace value (will be used later when environment roots are introduced).
+  # Dev workload namespace.
   namespace: online-shop-dev
 
-  # Example domain placeholder (will be used later for environment-specific Ingress hosts).
+  # Dev ingress domain.
   domain: dev.example.com
 
-# Pin image tags explicitly in dev overlays so rendered output is deterministic.
+# Pin core service tags explicitly for dev promotion control.
 frontend:
   replicaCount: 1
   image:
-    tag: v1
+    tag: v0.10.4
 
 cart:
   replicaCount: 1
   image:
-    tag: v1
+    tag: v0.10.4
 
 checkout:
   replicaCount: 1
   image:
-    tag: v1
+    tag: v0.10.4
 
 payment:
   replicaCount: 1
   image:
-    tag: v1
+    tag: v0.10.4
 
 # Use the shared Prometheus in the `monitoring` namespace for Rollout analyses.
 rollouts:

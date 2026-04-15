@@ -1,363 +1,202 @@
-# 🚀 SLO-Driven Progressive Delivery Platform
+# sre-platform Deployment Guide (Current Working Flow)
 
-## Full Deployment Guide (Production-Grade)
+This guide documents the currently validated dev deployment flow.
+For the target final platform vision and advanced capabilities such as canary rollouts, SLO-gated rollback, and policy enforcement, see README.md and ARCHITECTURE.md.
 
-This guide explains how to deploy the full SLO-driven online-shop platform with:
 
-- Helm-based services
-- ArgoCD (GitOps)
-- Argo Rollouts (Canary)
-- Prometheus (multi-window burn rate)
-- Grafana (SLO dashboards)
-- OPA (policy as code)
-- GitHub PR release gate
+This guide matches the current validated deployment flow for the repo:
 
-At the end you will see:
+- Terraform bootstraps a fresh GCP project and GKE cluster
+- Argo CD bootstraps GitOps from `argocd/apps/root.yaml`
+- Dev-only path is canonical (`bootstrap-dev` -> `monitoring-shared-dev` + `online-shop-dev`)
+- Frontend is reachable over HTTP via LoadBalancer IP (no DNS required)
 
-- Live burn rate metrics
-- Auto rollback on SLO violation
-- Grafana dashboards
-- PR merge blocking
-- Explainable release decisions
+## 1. Prerequisites
 
----
+- Tools: `terraform`, `gcloud`, `kubectl`, `helm`, `make`
+- GCP access to target project (example: `sre-platform-dev`)
+- Billing attached to the target project
+- `gcloud auth login` completed
 
-# 0️⃣ Prerequisites
+Set variables for target project and region:
 
-## Local tools
-
-- kubectl
-- helm 3+
-- docker
-- jq
-- GitHub repository
-- Docker registry (DockerHub or GHCR)
-- k6 (for load testing)
-
-## Kubernetes cluster
-
-Recommended:
-- Kubernetes 1.26+
-- 4 CPU minimum
-- 8GB RAM minimum
-- Ingress controller (nginx)
-- Default StorageClass
-
-You can use:
-- Kind (demo)
-- Minikube
-- EKS / GKE / AKS
-
----
-
-# 1️⃣ Install Platform Components
-
----
-
-## 1.1 Install ArgoCD
-
-```bash
-kubectl create namespace argocd
-
-helm repo add argo https://argoproj.github.io/argo-helm
-
-helm install argocd argo/argo-cd -n argocd
+```powershell
+$env:PROJECT_ID="PROJECT_ID_HERE"
+$env:REGION="us-central1"
 ```
 
-Get admin password:
+## 2. Terraform Apply (Fresh Project)
 
-```bash
-kubectl -n argocd get secret argocd-initial-admin-secret \
-  -o jsonpath="{.data.password}" | base64 -d
+From repo root:
+
+```powershell
+cd terraform
+terraform init
+terraform plan -var "project_id=$env:PROJECT_ID" -var "region=$env:REGION" -out=tfplan
+terraform apply tfplan
 ```
 
-Port forward:
+What this creates:
 
-```bash
-kubectl port-forward svc/argocd-server -n argocd 8080:443
+- Required project APIs
+- Dedicated GKE node service account + IAM binding
+- VPC + subnet
+- Regional GKE cluster + node pools
+
+## 3. kubeconfig Setup
+
+```powershell
+$cluster = terraform -chdir=terraform output -raw cluster_name
+$region  = terraform -chdir=terraform output -raw region
+gcloud container clusters get-credentials $cluster --region $region --project $env:PROJECT_ID
+kubectl get nodes
 ```
 
-## 1.2 Install Argo Rollouts
+## 4. Install Cluster Controllers
 
-```bash
-kubectl create namespace argo-rollouts
+From repo root:
 
-helm install argo-rollouts argo/argo-rollouts \
-  -n argo-rollouts
+```powershell
+make install-ingress
+make install-argocd
+make install-argo-rollouts
 ```
 
-Install kubectl plugin:
+Validate controller namespaces:
 
-```bash
-kubectl argo rollouts version
+```powershell
+kubectl get ns ingress-nginx,argocd,argo-rollouts,monitoring,online-shop-dev
 ```
 
-## 1.3 Install kube-prometheus-stack
+`monitoring` and `online-shop-dev` may not exist yet; they are created by Argo CD sync.
 
-```bash
-kubectl create namespace monitoring
+## 5. Bootstrap Argo CD Root App
 
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-
-helm install monitoring prometheus-community/kube-prometheus-stack \
-  -n monitoring
+```powershell
+make argocd-root
+kubectl -n argocd get applications
 ```
 
-This installs:
+Expected canonical app chain:
 
-- Prometheus
-- Alertmanager
-- Grafana
-- Node exporter
+1. `online-shop-platform`
+2. `bootstrap-dev`
+3. `monitoring-shared-dev`
+4. `online-shop-dev`
 
----
+`online-shop-platform` is configured to include only `argocd/apps/apps/envs-dev.yaml` (dev-only path).
 
-# 2️⃣ Deploy Online Shop Services (Helm)
+## 6. Dev App Convergence
 
-We deploy 4 services:
+Track convergence:
 
-- frontend
-- cart
-- checkout
-- payment
-
-Example:
-
-```bash
-helm dependency build charts/platform
-helm upgrade --install online-shop charts/platform -n online-shop
+```powershell
+kubectl -n argocd get applications -w
 ```
 
-Repeat for other services.
+Wait until all are `Synced` and `Healthy`:
 
-Verify:
+- `online-shop-platform`
+- `bootstrap-dev`
+- `monitoring-shared-dev`
+- `online-shop-dev`
 
-```bash
-kubectl get pods
+Optional local validation before/after cluster sync:
+
+```powershell
+make preflight ENV=dev PROJECT_ID=$env:PROJECT_ID
 ```
 
----
+## 7. Access Frontend via LoadBalancer IP (HTTP)
 
-# 3️⃣ Apply SLO Burn Rate Recording Rules
+Get ingress controller external IP:
 
-Apply rules:
-
-```bash
-kubectl get prometheusrule -A | findstr online-shop
+```powershell
+$lb = kubectl -n ingress-nginx get svc ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+$lb
 ```
 
-Port-forward Prometheus:
+Verify app ingress and backend mapping:
 
-```bash
-kubectl port-forward svc/monitoring-kube-prometheus-prometheus 9090 -n monitoring
+```powershell
+kubectl -n online-shop-dev get ingress online-shop-frontend
+kubectl -n online-shop-dev get svc frontend
 ```
 
-Verify metrics:
+Smoke test over HTTP (no DNS, no TLS):
 
-- `slo:burn_rate_5m`
-- `slo:burn_rate_1h`
-
----
-
-# 4️⃣ Import Grafana Dashboard
-
-Port-forward:
-
-```bash
-kubectl port-forward svc/monitoring-grafana 3000:80 -n monitoring
+```powershell
+curl.exe -I "http://$lb/"
 ```
 
-Login:
+Open in browser:
 
-- user: `admin`
-- password: `prom-operator`
-
-Import:
-
-- `observability/grafana/global-slo-dashboard.json`
-
-You now see live burn rate panels.
-
----
-
-# 5️⃣ Enable Canary Rollouts
-
-Apply rollout:
-
-```bash
-kubectl get rollout -n online-shop
+```text
+http://<LOADBALANCER_IP>
 ```
 
-Deploy new version:
+## Troubleshooting (Real Issues Seen)
 
-```bash
-kubectl argo rollouts set image frontend \
-  frontend=dmitryzhuravlev/online-shop-frontend:v2
-```
+### Helm rendering fails with nil pointer
 
-Watch rollout:
+Symptoms:
 
-```bash
-kubectl argo rollouts get rollout frontend --watch
-```
+- `make preflight ENV=dev` fails in `helm lint`/`helm template`
+- Errors around missing nested values (for example rollout analysis or serviceAccount keys)
 
----
+Action:
 
-# 6️⃣ Add Automatic Rollback via AnalysisTemplate
+- Add explicit defaults in chart `values.yaml`
+- Make templates nil-safe when reading nested values
 
-Create AnalysisTemplate:
+### Argo CD app stuck OutOfSync/Running for monitoring
 
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: AnalysisTemplate
-metadata:
-  name: slo-analysis
-spec:
-  metrics:
-    - name: burn-rate-fast
-      interval: 30s
-      successCondition: result < 14
-      provider:
-        prometheus:
-          address: http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090
-          query: slo:burn_rate_5m
-```
+Symptoms:
 
-Attach to Rollout:
+- `monitoring-shared-dev` does not converge
+- CRD-heavy sync gets stuck during apply/pre-sync
 
-```yaml
-strategy:
-  canary:
-    analysis:
-      templates:
-        - templateName: slo-analysis
-```
+Action:
 
-Now:
+- Ensure monitoring app has sync options for CRD-heavy installs:
+  - `ServerSideApply=true`
+  - `Replace=true`
 
-- If burn rate exceeds threshold → automatic rollback.
+### `online-shop-dev` becomes Degraded at runtime
 
----
+Symptoms:
 
-# 7️⃣ Enable GitOps with ArgoCD
+- App is `Synced` but `Degraded`
+- Pods restart or readiness fails
 
-Apply application:
+Action:
 
-```bash
-kubectl apply -f argocd/apps/frontend.yaml
-```
+1. `kubectl -n online-shop-dev get pods`
+2. `kubectl -n online-shop-dev logs <pod> --previous`
+3. Verify service-to-service env/config wiring from chart values and generated ConfigMaps
+4. Re-sync app after fix
 
-ArgoCD will:
+## Current Successful End State (Dev)
 
-- Watch Git
-- Sync Helm
-- Apply Rollouts automatically
+- `online-shop-platform`: `Synced/Healthy`
+- `bootstrap-dev`: `Synced/Healthy`
+- `monitoring-shared-dev`: `Synced/Healthy`
+- `online-shop-dev`: `Synced/Healthy`
+- Frontend reachable over HTTP via ingress LoadBalancer IP
 
----
+## What this guide does not cover yet
 
-# 8️⃣ Enable GitHub PR Release Gate
+- Stage / production environment convergence
+- Full progressive delivery enablement (Argo Rollouts as primary release path)
+- TLS / DNS / production-grade ingress configuration
+- GitHub PR gate and OPA-based policy enforcement
+- Full k6-based load and failure scenario validation
 
-Workflow:
+Additionally, the core SRE governance layer is not yet fully exercised in this guide:
 
-- `.github/workflows/slo-gate.yaml`
+- End-to-end SLO validation under real load
+- Error budget tracking and burn rate evaluation in live scenarios
+- Automated rollback decisions based on SLO violations
+- Explainable release decisions (promote vs rollback)
 
-Enable branch protection in GitHub:
-
-- Require status check
-- Select: `slo-check`
-
-Now:
-
-- PR to main
-- GitHub Action queries Prometheus
-- OPA evaluates policy
-- If SLO unhealthy → merge blocked
-
----
-
-# 9️⃣ Generate Traffic (Simulate SLO Violation)
-
-Example k6 script:
-
-```javascript
-import http from 'k6/http';
-
-export default function () {
-  http.get('http://frontend');
-}
-```
-
-Run:
-
-```bash
-k6 run load.js
-```
-
-To simulate errors:
-
-- Inject 5–10% HTTP 500
-- Increase RPS
-
-Observe:
-
-- Burn rate increases
-- Grafana turns red
-- Rollout auto-aborts
-- PR gets blocked
-
----
-
-# 🔟 What You Achieved
-
-| Capability | Component |
-|---|---|
-| Canary deployments | Argo Rollouts |
-| Multi-window burn | Prometheus |
-| Error budget tracking | Recording rules |
-| Global SLO dashboard | Grafana |
-| Policy-as-code | OPA |
-| Merge blocking | GitHub Actions |
-| GitOps sync | ArgoCD |
-
----
-
-# 🎯 Interview Positioning
-
-You implemented:
-
-**SLO-driven progressive delivery with multi-window burn rate enforcement, GitOps synchronization, and policy-based release governance.**
-
-This demonstrates:
-
-- Production-grade SRE thinking
-- Platform engineering capability
-- Advanced DevOps automation
-- Release governance architecture
-
----
-
-# 🔥 Optional Enhancements
-
-- Multi-environment overlays (dev/stage/prod)
-- Argo Image Updater
-- Error budget remaining calculation rule
-- Slack alert integration
-- Multi-service SLO aggregation
-- Terraform infra bootstrap
-- Cost-aware autoscaling
-
----
-
-# ✅ Final Result
-
-You now have:
-
-- Real online shop
-- Real canary
-- Real SLO burn tracking
-- Real rollback
-- Real GitHub enforcement
-- Real observability
-- Real observability
-
-Real observability
+These capabilities are part of the intended final platform design and are covered in `README.md` and `ARCHITECTURE.md`, but are not yet implemented or validated in the current dev deployment flow.

@@ -32,6 +32,19 @@ podLabels: {}
 
 resources: {}
 
+probes:
+  enabled: true
+  readiness:
+    tcpSocket:
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  liveness:
+    tcpSocket:
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 20
+
 configmap:
   create: true
   data:

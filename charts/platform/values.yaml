@@ -9,6 +9,19 @@ frontend:
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-frontend
     tag: "v0.10.4"
+  service:
+    port: 80
+    targetPort: 8080
+  configmap:
+    data:
+      PORT: "8080"
+      PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+      CURRENCY_SERVICE_ADDR: "currencyservice:7000"
+      CART_SERVICE_ADDR: "cart:7070"
+      RECOMMENDATION_SERVICE_ADDR: "recommendationservice:8080"
+      SHIPPING_SERVICE_ADDR: "shippingservice:50051"
+      CHECKOUT_SERVICE_ADDR: "checkout:5050"
+      AD_SERVICE_ADDR: "adservice:9555"
   monitoring:
     serviceMonitor:
       # MUST match `observability/helm/kube-prometheus-stack/values.yaml` serviceMonitorSelector.
@@ -21,6 +34,13 @@ cart:
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-cartservice
     tag: "v0.10.4"
+  service:
+    port: 7070
+    targetPort: 7070
+  configmap:
+    data:
+      PORT: "7070"
+      REDIS_ADDR: "redis:6379"
   monitoring:
     serviceMonitor:
       labels:
@@ -32,6 +52,18 @@ checkout:
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-checkoutservice
     tag: "v0.10.4"
+  service:
+    port: 5050
+    targetPort: 5050
+  configmap:
+    data:
+      PORT: "5050"
+      PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+      SHIPPING_SERVICE_ADDR: "shippingservice:50051"
+      PAYMENT_SERVICE_ADDR: "payment:50051"
+      EMAIL_SERVICE_ADDR: "emailservice:8080"
+      CURRENCY_SERVICE_ADDR: "currencyservice:7000"
+      CART_SERVICE_ADDR: "cart:7070"
   monitoring:
     serviceMonitor:
       labels:
@@ -43,6 +75,12 @@ payment:
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-paymentservice
     tag: "v0.10.4"
+  service:
+    port: 50051
+    targetPort: 50051
+  configmap:
+    data:
+      PORT: "50051"
   monitoring:
     serviceMonitor:
       labels:
@@ -75,6 +113,13 @@ adservice:
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-adservice
     tag: "v0.10.4"
+  service:
+    port: 9555
+    targetPort: 9555
+  configmap:
+    data:
+      PORT: "9555"
+      PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
   monitoring:
     serviceMonitor:
       labels:
@@ -86,6 +131,12 @@ currencyservice:
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-currencyservice
     tag: "v0.10.4"
+  service:
+    port: 7000
+    targetPort: 7000
+  configmap:
+    data:
+      PORT: "7000"
   monitoring:
     serviceMonitor:
       labels:
@@ -97,6 +148,12 @@ emailservice:
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-emailservice
     tag: "v0.10.4"
+  service:
+    port: 8080
+    targetPort: 8080
+  configmap:
+    data:
+      PORT: "8080"
   monitoring:
     serviceMonitor:
       labels:
@@ -108,6 +165,12 @@ loadgenerator:
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-loadgenerator
     tag: "v0.10.4"
+  probes:
+    enabled: false
+  configmap:
+    data:
+      FRONTEND_ADDR: "frontend:80"
+      USERS: "10"
   monitoring:
     serviceMonitor:
       labels:
@@ -119,6 +182,12 @@ productcatalogservice:
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-productcatalogservice
     tag: "v0.10.4"
+  service:
+    port: 3550
+    targetPort: 3550
+  configmap:
+    data:
+      PORT: "3550"
   monitoring:
     serviceMonitor:
       labels:
@@ -130,6 +199,13 @@ recommendationservice:
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-recommendationservice
     tag: "v0.10.4"
+  service:
+    port: 8080
+    targetPort: 8080
+  configmap:
+    data:
+      PORT: "8080"
+      PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
   monitoring:
     serviceMonitor:
       labels:
@@ -141,6 +217,9 @@ redis:
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-redis-cart
     tag: "7-alpine"
+  service:
+    port: 6379
+    targetPort: 6379
   monitoring:
     serviceMonitor:
       labels:
@@ -152,6 +231,12 @@ shippingservice:
   image:
     repository: docker.io/dmitryzhuravlev/online-shop-shippingservice
     tag: "v0.10.4"
+  service:
+    port: 50051
+    targetPort: 50051
+  configmap:
+    data:
+      PORT: "50051"
   monitoring:
     serviceMonitor:
       labels:

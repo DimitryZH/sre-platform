@@ -22,23 +22,32 @@ prometheus:
     serviceMonitorSelector:
       matchLabels:
         release: monitoring
-    # Only look for ServiceMonitors in the specified namespaces.
+    # Namespace selectors are label selectors in recent Prometheus CRDs.
     serviceMonitorNamespaceSelector:
-      matchNames:
-        - monitoring
-        - online-shop
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - monitoring
+            - online-shop
 
     podMonitorNamespaceSelector:
-      matchNames:
-        - monitoring
-        - online-shop
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - monitoring
+            - online-shop
 
     # Only load PrometheusRules explicitly labeled for this Prometheus release.
     ruleSelector:
       matchLabels:
         release: monitoring
-    # Only look for PrometheusRules in the specified namespaces.
+    # Namespace selectors are label selectors in recent Prometheus CRDs.
     ruleNamespaceSelector:
-      matchNames:
-        - monitoring
-        - online-shop
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - monitoring
+            - online-shop

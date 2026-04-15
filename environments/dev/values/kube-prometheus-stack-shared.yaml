@@ -5,18 +5,24 @@ prometheus:
       matchLabels:
         release: monitoring
     serviceMonitorNamespaceSelector:
-      matchNames:
-        - online-shop-dev
-        - online-shop-stage
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - online-shop-dev
+            - online-shop-stage
 
     ruleSelector:
       matchLabels:
         release: monitoring
     ruleNamespaceSelector:
-      matchNames:
-        - monitoring
-        - online-shop-dev
-        - online-shop-stage
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - monitoring
+            - online-shop-dev
+            - online-shop-stage
 
 # Avoid ArgoCD deadlocks on kube-prometheus admission hook Jobs/RBAC in dev bootstrap.
 prometheusOperator:

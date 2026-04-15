@@ -22,6 +22,7 @@ frontend:
       SHIPPING_SERVICE_ADDR: "shippingservice:50051"
       CHECKOUT_SERVICE_ADDR: "checkout:5050"
       AD_SERVICE_ADDR: "adservice:9555"
+      SHOPPING_ASSISTANT_SERVICE_ADDR: "shoppingassistantservice:80"
   monitoring:
     serviceMonitor:
       # MUST match `observability/helm/kube-prometheus-stack/values.yaml` serviceMonitorSelector.

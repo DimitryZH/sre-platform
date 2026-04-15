@@ -18,3 +18,9 @@ prometheus:
         - online-shop-dev
         - online-shop-stage
 
+# Avoid ArgoCD deadlocks on kube-prometheus admission hook Jobs/RBAC in dev bootstrap.
+prometheusOperator:
+  admissionWebhooks:
+    patch:
+      enabled: false
+

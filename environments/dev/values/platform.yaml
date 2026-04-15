@@ -17,6 +17,9 @@ global:
 # Pin core service tags explicitly for dev promotion control.
 frontend:
   replicaCount: 1
+  ingress:
+    # Dev: allow catch-all ingress so frontend works directly by LoadBalancer IP.
+    useHost: false
   image:
     tag: v0.10.4
 

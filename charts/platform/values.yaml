@@ -1,6 +1,9 @@
 frontend:
   name: frontend
   replicaCount: 2
+  ingress:
+    # Keep host-based ingress by default; dev overlay may disable for direct LB IP access.
+    useHost: true
   deployment:
     # Frontend is managed by Argo Rollouts (Rollout resource), not a Deployment.
     enabled: true

@@ -1,4 +1,7 @@
 controller:
+  extraArgs:
+    # Dev traffic is intentionally IP-only/catch-all; export request metrics for undefined hosts.
+    metrics-per-undefined-host: "true"
   metrics:
     # Required for SLO input metrics such as nginx_ingress_controller_requests.
     enabled: true

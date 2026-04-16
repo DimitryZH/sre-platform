@@ -10,6 +10,10 @@ metadata:
 spec:
   {{ $releaseNs := .Release.Namespace }}
   {{ $frontendHost := (printf "frontend.%s" (.Values.global.domain | default "example.com")) }}
+  {{ $useHostFilter := true }}
+  {{ if and .Values.frontend .Values.frontend.ingress (hasKey .Values.frontend.ingress "useHost") }}
+  {{ $useHostFilter = .Values.frontend.ingress.useHost }}
+  {{ end }}
   groups:
     - name: online-shop.slo
       rules:
@@ -30,33 +34,33 @@ spec:
         - record: slo:error_ratio_5m
           expr: |
             (
-              sum(rate(nginx_ingress_controller_requests{namespace="{{ $releaseNs }}",host="{{ $frontendHost }}",status=~"5.."}[5m]))
+              sum(rate(nginx_ingress_controller_requests{exported_namespace="{{ $releaseNs }}",{{- if $useHostFilter }}host="{{ $frontendHost }}",{{- end }}status=~"5.."}[5m]))
               /
-              sum(rate(nginx_ingress_controller_requests{namespace="{{ $releaseNs }}",host="{{ $frontendHost }}"}[5m]))
+              sum(rate(nginx_ingress_controller_requests{exported_namespace="{{ $releaseNs }}",{{- if $useHostFilter }}host="{{ $frontendHost }}",{{- end }}status!=""}[5m]))
             ) or on() vector(0)
 
         - record: slo:error_ratio_1h
           expr: |
             (
-              sum(rate(nginx_ingress_controller_requests{namespace="{{ $releaseNs }}",host="{{ $frontendHost }}",status=~"5.."}[1h]))
+              sum(rate(nginx_ingress_controller_requests{exported_namespace="{{ $releaseNs }}",{{- if $useHostFilter }}host="{{ $frontendHost }}",{{- end }}status=~"5.."}[1h]))
               /
-              sum(rate(nginx_ingress_controller_requests{namespace="{{ $releaseNs }}",host="{{ $frontendHost }}"}[1h]))
+              sum(rate(nginx_ingress_controller_requests{exported_namespace="{{ $releaseNs }}",{{- if $useHostFilter }}host="{{ $frontendHost }}",{{- end }}status!=""}[1h]))
             ) or on() vector(0)
 
         - record: slo:error_ratio_30m
           expr: |
             (
-              sum(rate(nginx_ingress_controller_requests{namespace="{{ $releaseNs }}",host="{{ $frontendHost }}",status=~"5.."}[30m]))
+              sum(rate(nginx_ingress_controller_requests{exported_namespace="{{ $releaseNs }}",{{- if $useHostFilter }}host="{{ $frontendHost }}",{{- end }}status=~"5.."}[30m]))
               /
-              sum(rate(nginx_ingress_controller_requests{namespace="{{ $releaseNs }}",host="{{ $frontendHost }}"}[30m]))
+              sum(rate(nginx_ingress_controller_requests{exported_namespace="{{ $releaseNs }}",{{- if $useHostFilter }}host="{{ $frontendHost }}",{{- end }}status!=""}[30m]))
             ) or on() vector(0)
 
         - record: slo:error_ratio_6h
           expr: |
             (
-              sum(increase(nginx_ingress_controller_requests{namespace="{{ $releaseNs }}",host="{{ $frontendHost }}",status=~"5.."}[6h]))
+              sum(increase(nginx_ingress_controller_requests{exported_namespace="{{ $releaseNs }}",{{- if $useHostFilter }}host="{{ $frontendHost }}",{{- end }}status=~"5.."}[6h]))
               /
-              sum(increase(nginx_ingress_controller_requests{namespace="{{ $releaseNs }}",host="{{ $frontendHost }}"}[6h]))
+              sum(increase(nginx_ingress_controller_requests{exported_namespace="{{ $releaseNs }}",{{- if $useHostFilter }}host="{{ $frontendHost }}",{{- end }}status!=""}[6h]))
             ) or on() vector(0)
 
         # Multi-window burn rate (Google SRE model: fast/slow windows).

@@ -1,0 +1,11 @@
+controller:
+  metrics:
+    # Required for SLO input metrics such as nginx_ingress_controller_requests.
+    enabled: true
+    service:
+      enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        # Must match kube-prometheus-stack serviceMonitorSelector.
+        release: monitoring

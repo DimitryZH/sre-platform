@@ -9,6 +9,7 @@ prometheus:
         - key: kubernetes.io/metadata.name
           operator: In
           values:
+            - ingress-nginx
             - online-shop-dev
             - online-shop-stage
 

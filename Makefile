@@ -112,7 +112,7 @@ helm-bootstrap:
 
 install-ingress: helm-bootstrap
 	@echo Installing ingress-nginx
-	helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx -n ingress-nginx --create-namespace
+	helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx -n ingress-nginx --create-namespace -f observability/helm/ingress-nginx/values.yaml
 
 install-argocd: helm-bootstrap
 	@echo Installing ArgoCD

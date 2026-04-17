@@ -1,5 +1,6 @@
 {{- if .Values.break.enabled -}}
 {{- $host := (printf "frontend.%s" (.Values.global.domain | default "example.com")) -}}
+{{- $useHost := .Values.frontend.ingress.useHost -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -12,7 +13,9 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: {{ $host | quote }}
+    - {{- if $useHost }}
+      host: {{ $host | quote }}
+      {{- end }}
       http:
         paths:
           - path: /break

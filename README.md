@@ -28,6 +28,36 @@ Release decisions are based on:
 
 This produces delivery behavior that is aligned with user experience, not just infrastructure noise.
 
+## Live SLO Validation (Quick View)
+
+![SLO Spike](docs/observability/screenshots/02_short_spike_2026-04-17_1153-1154.png)
+
+This platform demonstrates **SLO-driven observability using real traffic and controlled error injection**.
+
+### What is validated
+
+- Healthy baseline (no errors, zero burn)
+- Error injection (`/break` → HTTP 500)
+- SLO impact (`error_ratio` and burn-rate spike)
+- Multi-window behavior (fast vs long burn windows)
+- Fast alert lifecycle (pending → firing → recovery)
+- Clean-slate gating due to long-window burn persistence
+
+---
+
+### Explore
+
+- Full visual evidence:  
+  [`docs/observability/screenshots/`](docs/observability/screenshots/)
+
+- Grafana dashboard:  
+  [`observability/grafana/global-slo-dashboard.json`](observability/grafana/global-slo-dashboard.json)
+
+- Full validation report:  
+  [`docs/slo_validation_dev_environment.md`](docs/slo_validation_dev_environment.md)
+
+
+
 ## Core capabilities
 
 ### GitOps deployment
@@ -116,10 +146,10 @@ The platform is designed for deterministic, repeatable failure tests. A typical 
 - [`charts/`](charts/)
   - [`charts/platform/Chart.yaml`](charts/platform/Chart.yaml)
   - [`charts/platform/values.yaml`](charts/platform/values.yaml)
-  - [`charts/platform/templates/deployment.yaml`](charts/platform/templates/deployment.yaml)
+  - [`charts/platform/templates/frontend-rollout.yaml`](charts/platform/templates/frontend-rollout.yaml)
 
 - [`argocd/`](argocd/)
-  - [`argocd/apps/frontend.yaml`](argocd/apps/frontend.yaml)
+  - [`argocd/apps/root.yaml`](argocd/apps/root.yaml)
 
 - Progressive delivery manifests are packaged in Helm under [`charts/platform/templates/`](charts/platform/templates/frontend-rollout.yaml).
 

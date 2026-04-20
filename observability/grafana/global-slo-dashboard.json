@@ -1,18 +1,157 @@
 {
+  "uid": "phase4-slo-visual",
   "title": "Global SLO Dashboard",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "10s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "panels": [
     {
-      "type": "stat",
-      "title": "Burn Rate (5m)",
+      "id": 1,
+      "type": "timeseries",
+      "title": "Total Request Rate (5m)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
       "targets": [
-        { "expr": "slo:burn_rate_5m" }
+        {
+          "refId": "A",
+          "expr": "sum(rate(nginx_ingress_controller_requests{exported_namespace=\"online-shop-dev\",status!=\"\"}[5m]))",
+          "legendFormat": "total_rps"
+        }
       ]
     },
     {
-      "type": "stat",
-      "title": "Burn Rate (1h)",
+      "id": 2,
+      "type": "timeseries",
+      "title": "5xx Request Rate (5m)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
       "targets": [
-        { "expr": "slo:burn_rate_1h" }
+        {
+          "refId": "A",
+          "expr": "sum(rate(nginx_ingress_controller_requests{exported_namespace=\"online-shop-dev\",status=~\"5..\"}[5m]))",
+          "legendFormat": "5xx_rps"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "SLO Error Ratio (5m)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "slo:error_ratio_5m",
+          "legendFormat": "error_ratio_5m"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "SLO Burn Rate (5m)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "slo:burn_rate_5m",
+          "legendFormat": "burn_rate_5m"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "SLO Burn Rate (30m)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "slo:burn_rate_30m",
+          "legendFormat": "burn_rate_30m"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "SLO Burn Rate (1h)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "slo:burn_rate_1h",
+          "legendFormat": "burn_rate_1h"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "SLO Burn Rate (6h)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "slo:burn_rate_6h",
+          "legendFormat": "burn_rate_6h"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "SLO Alert State",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ALERTS{alertname=~\"OnlineShopSLO.*\"}",
+          "legendFormat": "{{alertname}} ({{alertstate}})"
+        }
       ]
     }
   ]

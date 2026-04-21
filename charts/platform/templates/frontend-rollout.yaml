@@ -45,18 +45,18 @@ spec:
         nginx:
           stableIngress: online-shop-frontend
       steps:
-        - setWeight: 20
+        - setWeight: 10
+        - pause:
+            duration: 2m
         - analysis:
             templates:
-              - templateName: online-shop-slo-burnrate
-        - pause:
-            duration: 60
+              - templateName: frontend-slo-check
         - setWeight: 50
+        - pause:
+            duration: 2m
         - analysis:
             templates:
-              - templateName: online-shop-slo-burnrate
-        - pause:
-            duration: 120
+              - templateName: frontend-slo-check
         - setWeight: 100
 {{- end }}
 

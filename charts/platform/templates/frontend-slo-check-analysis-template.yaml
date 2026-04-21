@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: frontend-slo-check
+  labels:
+    app.kubernetes.io/part-of: online-shop
+spec:
+  args:
+    - name: prometheus-address
+      value: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+
+  metrics:
+    - name: burn-rate-5m
+      interval: 30s
+      count: 5
+      successCondition: result[0] <= 10
+      failureCondition: result[0] > 10
+      provider:
+        prometheus:
+          address: "{{`{{args.prometheus-address}}`}}"
+          query: |
+            slo:burn_rate_5m
+
+    - name: error-ratio-5m
+      interval: 30s
+      count: 5
+      successCondition: result[0] <= 0.02
+      failureCondition: result[0] > 0.02
+      provider:
+        prometheus:
+          address: "{{`{{args.prometheus-address}}`}}"
+          query: |
+            slo:error_ratio_5m

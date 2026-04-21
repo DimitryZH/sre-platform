@@ -20,6 +20,9 @@ frontend:
   ingress:
     # Dev: allow catch-all ingress so frontend works directly by LoadBalancer IP.
     useHost: false
+  # Frontend rollout mode: disable Deployment path via chart guard and render Rollout.
+  rollouts:
+    enabled: true
   image:
     tag: v0.10.4
 
@@ -40,4 +43,4 @@ payment:
 
 # Use the shared Prometheus in the `monitoring` namespace for Rollout analyses.
 rollouts:
-  enabled: false
+  enabled: true

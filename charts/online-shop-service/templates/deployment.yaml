@@ -1,4 +1,8 @@
-{{- if .Values.deployment.enabled -}}
+{{- $rolloutModeEnabled := false -}}
+{{- if and (hasKey .Values "rollouts") (hasKey .Values.rollouts "enabled") -}}
+{{- $rolloutModeEnabled = .Values.rollouts.enabled -}}
+{{- end -}}
+{{- if and .Values.deployment.enabled (not $rolloutModeEnabled) -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

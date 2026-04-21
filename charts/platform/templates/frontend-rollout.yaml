@@ -37,6 +37,13 @@ spec:
               port: http
             initialDelaySeconds: 15
             periodSeconds: 20
+          envFrom:
+            - configMapRef:
+                name: frontend-config
+                optional: true
+            - secretRef:
+                name: frontend-secret
+                optional: true
   strategy:
     canary:
       stableService: frontend

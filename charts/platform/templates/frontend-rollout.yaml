@@ -54,7 +54,7 @@ spec:
       steps:
         - setWeight: 10
         - pause:
-            duration: 2m
+            duration: 7m
         - analysis:
             templates:
               - templateName: frontend-slo-check

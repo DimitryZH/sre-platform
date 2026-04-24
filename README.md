@@ -56,6 +56,20 @@ This platform demonstrates **SLO-driven observability using real traffic and con
 - Full validation report:  
   [`docs/slo_validation_dev_environment.md`](docs/slo_validation_dev_environment.md)
 
+## SLO-Gated Progressive Delivery (Validated)
+
+![SLO-Gated Rollout Failure Decision (50% gate)](docs/assets/SC-05.png)
+
+Validated outcomes in `online-shop-dev`:
+- SLO-driven rollout decisions at both canary gates (10% and 50%)
+- Automatic abort when burn-rate/error-ratio breach thresholds
+- Multi-stage healthy-path promotion to 100% when signals stay healthy
+- Operational recovery from `Degraded` back to `Healthy` after abort
+
+Artifacts:
+- Case Study: [`docs/case-study/slo_rollout_demo.md`](docs/case-study/slo_rollout_demo.md)
+- Evidence: [`docs/evidence/slo_gated_rollout_evidence_dev.md`](docs/evidence/slo_gated_rollout_evidence_dev.md)
+- CLI Evidence: [`docs/evidence/slo_gated_rollout_cli_excerpts_dev.md`](docs/evidence/slo_gated_rollout_cli_excerpts_dev.md)
 
 
 ## Core capabilities

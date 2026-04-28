@@ -2,48 +2,50 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: online-shop-break-sustained
-  namespace: online-shop-load
+  name: online-shop-load-baseline
+  namespace: online-shop-dev
   labels:
+    app.kubernetes.io/name: online-shop-k6
+    app.kubernetes.io/component: load-test
     app.kubernetes.io/part-of: online-shop
 spec:
   ttlSecondsAfterFinished: 600
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: k6
+        app.kubernetes.io/name: online-shop-k6
+        app.kubernetes.io/component: load-test
         app.kubernetes.io/part-of: online-shop
     spec:
       restartPolicy: Never
       containers:
         - name: k6
           image: grafana/k6:0.49.0
-          args: ["run", "/scripts/sustained.js"]
+          args: ["run", "/scripts/baseline.js"]
           env:
-            - name: BASE_URL
+            - name: TARGET_URL
               value: "http://ingress-nginx-controller.ingress-nginx.svc.cluster.local"
-            - name: HOST
-              value: "frontend.obs.example.com"
-            - name: BREAK_PATH
-              value: "/break"
-            - name: ERROR_RATE
-              value: "0.02"
+            - name: REQUEST_PATH
+              value: "/"
+            - name: SCENARIO_LABEL
+              value: "baseline"
             - name: VUS
-              value: "30"
+              value: "20"
             - name: DURATION
-              value: "70m"
+              value: "30m"
+            - name: SLEEP_SECONDS
+              value: "0.1"
           volumeMounts:
             - name: scripts
               mountPath: /scripts
           resources:
             requests:
-              cpu: 200m
-              memory: 256Mi
+              cpu: 100m
+              memory: 128Mi
             limits:
-              cpu: 1000m
-              memory: 512Mi
+              cpu: 500m
+              memory: 256Mi
       volumes:
         - name: scripts
           configMap:
             name: online-shop-k6-scripts
-

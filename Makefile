@@ -1,4 +1,5 @@
 .PHONY: bootstrap deploy break break-spike break-sustained break-clean clean \
+  load-config load-baseline load-failure-10 load-failure-50 load-clean \
   check-project preflight helm-lint render kubeconform-install kube-validate \
   tf-validate tf-plan terraform-init terraform-apply terraform-destroy kubeconfig \
   helm-bootstrap install-ingress install-argocd install-argo-rollouts argocd-root status
@@ -37,6 +38,8 @@ KUBECONFORM_VERSION ?= v0.6.7
 KUBECONFORM_K8S_VERSION ?= 1.29.0
 KUBECONFORM_BIN := tools\bin\kubeconform.exe
 KUBECONFORM_URL := https://github.com/yannh/kubeconform/releases/download/$(KUBECONFORM_VERSION)/kubeconform-windows-amd64.zip
+LOAD_NAMESPACE ?= online-shop-dev
+K6_SCRIPTS_CONFIGMAP ?= online-shop-k6-scripts
 
 check-project:
 	@if "$(PROJECT_ID)"=="" (echo ERROR: PROJECT_ID is required. Example: make bootstrap PROJECT_ID=my-gcp-project & exit /b 1)
@@ -73,7 +76,7 @@ kube-validate: kubeconform-install render
 	@echo Validating rendered Helm output + raw manifests with kubeconform (Kubernetes $(KUBECONFORM_K8S_VERSION))
 	@$(KUBECONFORM_BIN) -strict -summary -ignore-missing-schemas -kubernetes-version $(KUBECONFORM_K8S_VERSION) _rendered_platform.utf8.yaml
 	@$(KUBECONFORM_BIN) -strict -summary -ignore-missing-schemas -kubernetes-version $(KUBECONFORM_K8S_VERSION) argocd/ observability/ingress/
-	@$(KUBECONFORM_BIN) -strict -summary -ignore-missing-schemas -kubernetes-version $(KUBECONFORM_K8S_VERSION) k6/k8s-base.yaml k6/job-baseline.yaml k6/job-spike.yaml k6/job-sustained.yaml
+	@$(KUBECONFORM_BIN) -strict -summary -ignore-missing-schemas -kubernetes-version $(KUBECONFORM_K8S_VERSION) k6/k8s/job-baseline.yaml k6/k8s/job-failure-10.yaml k6/k8s/job-failure-50.yaml
 
 # WHY: Prevents Terraform formatting/syntax/provider config errors from breaking deployments and CI.
 tf-validate:
@@ -139,29 +142,57 @@ deploy: argocd-root
 break: break-spike
 
 break-spike:
-	@echo Running deterministic break scenario: baseline + 5m spike
-	kubectl apply -f k6/k8s-base.yaml
-	-kubectl -n online-shop-load delete job online-shop-baseline-load --ignore-not-found
-	-kubectl -n online-shop-load delete job online-shop-break-spike --ignore-not-found
-	kubectl apply -f k6/job-baseline.yaml
-	kubectl apply -f k6/job-spike.yaml
-	@echo Jobs started in namespace online-shop-load
+	@echo Deprecated alias: use make load-failure-10
+	@$(MAKE) load-failure-10
 
 break-sustained:
-	@echo Running deterministic break scenario: baseline + sustained (~70m)
-	kubectl apply -f k6/k8s-base.yaml
-	-kubectl -n online-shop-load delete job online-shop-baseline-load --ignore-not-found
-	-kubectl -n online-shop-load delete job online-shop-break-sustained --ignore-not-found
-	kubectl apply -f k6/job-baseline.yaml
-	kubectl apply -f k6/job-sustained.yaml
-	@echo Jobs started in namespace online-shop-load
+	@echo Deprecated alias: use make load-failure-50
+	@$(MAKE) load-failure-50
 
 break-clean:
-	@echo Cleaning break/load jobs
-	-kubectl -n online-shop-load delete job online-shop-baseline-load --ignore-not-found
-	-kubectl -n online-shop-load delete job online-shop-break-spike --ignore-not-found
-	-kubectl -n online-shop-load delete job online-shop-break-sustained --ignore-not-found
-	-kubectl delete namespace online-shop-load --ignore-not-found
+	@echo Deprecated alias: use make load-clean
+	@$(MAKE) load-clean
+
+load-config:
+	@echo Refreshing k6 scripts ConfigMap in namespace $(LOAD_NAMESPACE)
+	kubectl -n $(LOAD_NAMESPACE) create configmap $(K6_SCRIPTS_CONFIGMAP) --from-file=k6/scripts --dry-run=client -o yaml | kubectl apply -f -
+
+load-baseline: load-config
+	@echo Running k6 baseline scenario in namespace $(LOAD_NAMESPACE)
+	-kubectl -n $(LOAD_NAMESPACE) delete job online-shop-load-baseline --ignore-not-found
+	kubectl apply -f k6/k8s/job-baseline.yaml
+	@echo Next commands:
+	@echo "  kubectl -n $(LOAD_NAMESPACE) get job online-shop-load-baseline -w"
+	@echo "  kubectl -n $(LOAD_NAMESPACE) logs -f job/online-shop-load-baseline"
+	@echo "  kubectl -n $(LOAD_NAMESPACE) get rollout frontend"
+	@echo "  kubectl -n $(LOAD_NAMESPACE) get analysisrun"
+
+load-failure-10: load-config
+	@echo Running k6 failure-10 scenario in namespace $(LOAD_NAMESPACE)
+	-kubectl -n $(LOAD_NAMESPACE) delete job online-shop-load-failure-10 --ignore-not-found
+	kubectl apply -f k6/k8s/job-failure-10.yaml
+	@echo Next commands:
+	@echo "  kubectl -n $(LOAD_NAMESPACE) get job online-shop-load-failure-10 -w"
+	@echo "  kubectl -n $(LOAD_NAMESPACE) logs -f job/online-shop-load-failure-10"
+	@echo "  kubectl -n $(LOAD_NAMESPACE) get rollout frontend -w"
+	@echo "  kubectl -n $(LOAD_NAMESPACE) get analysisrun -w"
+
+load-failure-50: load-config
+	@echo Running k6 failure-50 scenario in namespace $(LOAD_NAMESPACE)
+	-kubectl -n $(LOAD_NAMESPACE) delete job online-shop-load-failure-50 --ignore-not-found
+	kubectl apply -f k6/k8s/job-failure-50.yaml
+	@echo Next commands:
+	@echo "  kubectl -n $(LOAD_NAMESPACE) get job online-shop-load-failure-50 -w"
+	@echo "  kubectl -n $(LOAD_NAMESPACE) logs -f job/online-shop-load-failure-50"
+	@echo "  kubectl -n $(LOAD_NAMESPACE) get rollout frontend -w"
+	@echo "  kubectl -n $(LOAD_NAMESPACE) get analysisrun -w"
+
+load-clean:
+	@echo Cleaning k6 load/failure jobs in namespace $(LOAD_NAMESPACE)
+	-kubectl -n $(LOAD_NAMESPACE) delete job online-shop-load-baseline --ignore-not-found
+	-kubectl -n $(LOAD_NAMESPACE) delete job online-shop-load-failure-10 --ignore-not-found
+	-kubectl -n $(LOAD_NAMESPACE) delete job online-shop-load-failure-50 --ignore-not-found
+	-kubectl -n $(LOAD_NAMESPACE) delete configmap $(K6_SCRIPTS_CONFIGMAP) --ignore-not-found
 
 status:
 	@echo ArgoCD Applications:

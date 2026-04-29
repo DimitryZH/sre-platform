@@ -1,5 +1,6 @@
 .PHONY: bootstrap deploy break break-spike break-sustained break-clean clean \
   load-config load-baseline load-failure-10 load-failure-50 load-clean \
+  load-capture-baseline load-capture-failure-10 load-capture-failure-50 \
   check-project preflight helm-lint render kubeconform-install kube-validate \
   tf-validate tf-plan terraform-init terraform-apply terraform-destroy kubeconfig \
   helm-bootstrap install-ingress install-argocd install-argo-rollouts argocd-root status
@@ -166,6 +167,7 @@ load-baseline: load-config
 	@echo "  kubectl -n $(LOAD_NAMESPACE) logs -f job/online-shop-load-baseline"
 	@echo "  kubectl -n $(LOAD_NAMESPACE) get rollout frontend"
 	@echo "  kubectl -n $(LOAD_NAMESPACE) get analysisrun"
+	@if "$(RUN_ID)"=="" (echo "  make load-capture-baseline RUN_ID=baseline-YYYYMMDD-HHMM") else (echo "  make load-capture-baseline RUN_ID=$(RUN_ID)")
 
 load-failure-10: load-config
 	@echo Running k6 failure-10 scenario in namespace $(LOAD_NAMESPACE)
@@ -176,6 +178,7 @@ load-failure-10: load-config
 	@echo "  kubectl -n $(LOAD_NAMESPACE) logs -f job/online-shop-load-failure-10"
 	@echo "  kubectl -n $(LOAD_NAMESPACE) get rollout frontend -w"
 	@echo "  kubectl -n $(LOAD_NAMESPACE) get analysisrun -w"
+	@if "$(RUN_ID)"=="" (echo "  make load-capture-failure-10 RUN_ID=failure-10-YYYYMMDD-HHMM") else (echo "  make load-capture-failure-10 RUN_ID=$(RUN_ID)")
 
 load-failure-50: load-config
 	@echo Running k6 failure-50 scenario in namespace $(LOAD_NAMESPACE)
@@ -186,6 +189,16 @@ load-failure-50: load-config
 	@echo "  kubectl -n $(LOAD_NAMESPACE) logs -f job/online-shop-load-failure-50"
 	@echo "  kubectl -n $(LOAD_NAMESPACE) get rollout frontend -w"
 	@echo "  kubectl -n $(LOAD_NAMESPACE) get analysisrun -w"
+	@if "$(RUN_ID)"=="" (echo "  make load-capture-failure-50 RUN_ID=failure-50-YYYYMMDD-HHMM") else (echo "  make load-capture-failure-50 RUN_ID=$(RUN_ID)")
+
+load-capture-baseline:
+	bash scripts/capture_load_run_evidence.sh baseline online-shop-load-baseline $(RUN_ID)
+
+load-capture-failure-10:
+	bash scripts/capture_load_run_evidence.sh failure-10 online-shop-load-failure-10 $(RUN_ID)
+
+load-capture-failure-50:
+	bash scripts/capture_load_run_evidence.sh failure-50 online-shop-load-failure-50 $(RUN_ID)
 
 load-clean:
 	@echo Cleaning k6 load/failure jobs in namespace $(LOAD_NAMESPACE)

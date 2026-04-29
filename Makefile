@@ -41,6 +41,7 @@ KUBECONFORM_BIN := tools\bin\kubeconform.exe
 KUBECONFORM_URL := https://github.com/yannh/kubeconform/releases/download/$(KUBECONFORM_VERSION)/kubeconform-windows-amd64.zip
 LOAD_NAMESPACE ?= online-shop-dev
 K6_SCRIPTS_CONFIGMAP ?= online-shop-k6-scripts
+BASH_BIN ?= "C:\Program Files\Git\bin\bash.exe"
 
 check-project:
 	@if "$(PROJECT_ID)"=="" (echo ERROR: PROJECT_ID is required. Example: make bootstrap PROJECT_ID=my-gcp-project & exit /b 1)
@@ -192,13 +193,13 @@ load-failure-50: load-config
 	@if "$(RUN_ID)"=="" (echo "  make load-capture-failure-50 RUN_ID=failure-50-YYYYMMDD-HHMM") else (echo "  make load-capture-failure-50 RUN_ID=$(RUN_ID)")
 
 load-capture-baseline:
-	bash scripts/capture_load_run_evidence.sh baseline online-shop-load-baseline $(RUN_ID)
+	$(BASH_BIN) k6/scripts/capture_load_run_evidence.sh baseline online-shop-load-baseline $(RUN_ID)
 
 load-capture-failure-10:
-	bash scripts/capture_load_run_evidence.sh failure-10 online-shop-load-failure-10 $(RUN_ID)
+	$(BASH_BIN) k6/scripts/capture_load_run_evidence.sh failure-10 online-shop-load-failure-10 $(RUN_ID)
 
 load-capture-failure-50:
-	bash scripts/capture_load_run_evidence.sh failure-50 online-shop-load-failure-50 $(RUN_ID)
+	$(BASH_BIN) k6/scripts/capture_load_run_evidence.sh failure-50 online-shop-load-failure-50 $(RUN_ID)
 
 load-clean:
 	@echo Cleaning k6 load/failure jobs in namespace $(LOAD_NAMESPACE)

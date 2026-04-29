@@ -7,8 +7,8 @@ RUN_ID_INPUT="${3:-}"
 NAMESPACE="${LOAD_NAMESPACE:-online-shop-dev}"
 
 if [[ -z "${SCENARIO}" || -z "${JOB_NAME}" ]]; then
-  echo "Usage: scripts/capture_load_run_evidence.sh <scenario> <job-name> <run-id>"
-  echo "Example: scripts/capture_load_run_evidence.sh baseline online-shop-load-baseline baseline-20260429-1200"
+  echo "Usage: k6/scripts/capture_load_run_evidence.sh <scenario> <job-name> <run-id>"
+  echo "Example: k6/scripts/capture_load_run_evidence.sh baseline online-shop-load-baseline baseline-20260429-1200"
   exit 1
 fi
 

@@ -1,0 +1,62 @@
+$ kubectl -n online-shop-dev get job online-shop-load-baseline -o wide
+NAME                        STATUS    COMPLETIONS   DURATION   AGE   CONTAINERS   IMAGES              SELECTOR
+online-shop-load-baseline   Running   0/1           78s        78s   k6           grafana/k6:0.49.0   batch.kubernetes.io/controller-uid=3e595e0f-f237-49cf-b8b4-6a5662e11fe9
+
+$ kubectl -n online-shop-dev describe job online-shop-load-baseline
+Name:                        online-shop-load-baseline
+Namespace:                   online-shop-dev
+Selector:                    batch.kubernetes.io/controller-uid=3e595e0f-f237-49cf-b8b4-6a5662e11fe9
+Labels:                      app.kubernetes.io/component=load-test
+                             app.kubernetes.io/name=online-shop-k6
+                             app.kubernetes.io/part-of=online-shop
+Annotations:                 <none>
+Parallelism:                 1
+Completions:                 1
+Completion Mode:             NonIndexed
+Suspend:                     false
+Backoff Limit:               0
+TTL Seconds After Finished:  3600
+Start Time:                  Wed, 29 Apr 2026 14:23:29 -0400
+Pods Statuses:               1 Active (1 Ready) / 0 Succeeded / 0 Failed
+Pod Template:
+  Labels:  app.kubernetes.io/component=load-test
+           app.kubernetes.io/name=online-shop-k6
+           app.kubernetes.io/part-of=online-shop
+           batch.kubernetes.io/controller-uid=3e595e0f-f237-49cf-b8b4-6a5662e11fe9
+           batch.kubernetes.io/job-name=online-shop-load-baseline
+           controller-uid=3e595e0f-f237-49cf-b8b4-6a5662e11fe9
+           job-name=online-shop-load-baseline
+  Containers:
+   k6:
+    Image:      grafana/k6:0.49.0
+    Port:       <none>
+    Host Port:  <none>
+    Args:
+      run
+      /scripts/baseline.js
+    Limits:
+      cpu:     500m
+      memory:  256Mi
+    Requests:
+      cpu:     100m
+      memory:  128Mi
+    Environment:
+      TARGET_URL:      http://ingress-nginx-controller.ingress-nginx.svc.cluster.local
+      REQUEST_PATH:    /
+      SCENARIO_LABEL:  baseline
+      VUS:             20
+      DURATION:        30m
+      SLEEP_SECONDS:   0.1
+    Mounts:
+      /scripts from scripts (rw)
+  Volumes:
+   scripts:
+    Type:          ConfigMap (a volume populated by a ConfigMap)
+    Name:          online-shop-k6-scripts
+    Optional:      false
+  Node-Selectors:  <none>
+  Tolerations:     <none>
+Events:
+  Type    Reason            Age   From            Message
+  ----    ------            ----  ----            -------
+  Normal  SuccessfulCreate  80s   job-controller  Created pod: online-shop-load-baseline-cq6xb

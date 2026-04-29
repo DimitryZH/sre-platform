@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/component: load-test
     app.kubernetes.io/part-of: online-shop
 spec:
+  backoffLimit: 0
   ttlSecondsAfterFinished: 600
   template:
     metadata:

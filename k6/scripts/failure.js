@@ -18,6 +18,7 @@ export default function () {
   const res = http.get(`${targetUrl}${failurePath}`, { tags: { scenario: scenarioLabel } });
   check(res, {
     "failure: response received": (r) => r.status > 0,
+    "failure: generated 5xx": (r) => r.status >= 500,
   });
   sleep(sleepSeconds);
 }

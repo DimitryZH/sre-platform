@@ -97,5 +97,6 @@ Capture evidence during each run:
 
 ## Notes
 
+- This MVP does not automate rollout gate timing yet.
 - Test timing is operator-controlled.
 - Start failure scenarios at the intended rollout gate (10% or 50%).

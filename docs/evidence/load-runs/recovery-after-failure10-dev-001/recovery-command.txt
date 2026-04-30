@@ -1,0 +1,5 @@
+Recovery command used:
+kubectl patch rollout frontend -n online-shop-dev --type merge --patch-file C:\tmp\rollout-recovery-patch.json
+
+Patch file contents template:
+{"spec":{"template":{"metadata":{"annotations":{"rollout-trigger":"<timestamp>"}}}}}

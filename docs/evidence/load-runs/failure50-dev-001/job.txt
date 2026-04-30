@@ -1,0 +1,5 @@
+$ kubectl -n online-shop-dev get job online-shop-load-failure-50 -o wide
+Error from server (NotFound): jobs.batch "online-shop-load-failure-50" not found
+
+$ kubectl -n online-shop-dev describe job online-shop-load-failure-50
+Error from server (NotFound): jobs.batch "online-shop-load-failure-50" not found

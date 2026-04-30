@@ -1,0 +1,2 @@
+$ kubectl -n online-shop-dev logs job/online-shop-load-failure-50
+error: error from server (NotFound): jobs.batch "online-shop-load-failure-50" not found in namespace "online-shop-dev"

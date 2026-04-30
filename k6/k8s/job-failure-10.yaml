@@ -33,7 +33,7 @@ spec:
             - name: VUS
               value: "20"
             - name: DURATION
-              value: "5m"
+              value: "10m"
             - name: SLEEP_SECONDS
               value: "0.1"
           volumeMounts:

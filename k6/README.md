@@ -27,6 +27,7 @@ Used to validate:
 ### Failure at 10% Gate
 
 Runs failure traffic against `/break` using the `failure-10` scenario label.
+The default failure-10 run duration is `10m` to overlap the `10%` gate pause and first SLO analysis sampling window.
 
 Used to validate:
 
@@ -73,6 +74,7 @@ What these targets do:
    `make load-baseline RUN_ID=<run-id>`
 2. For first-gate failure validation, start:
    `make load-failure-10 RUN_ID=<run-id>` when rollout is at the 10% gate.
+   Keep failure traffic active through the first `frontend-slo-check` sampling interval.
 3. For second-gate failure validation, start:
    `make load-failure-50 RUN_ID=<run-id>` after first gate success and at the 50% gate.
 4. Capture run evidence:
@@ -130,4 +132,5 @@ Manual commands captured by the script include:
 - Rollout gate timing is not automated by these tests.
 - Test timing is operator-controlled.
 - Start failure scenarios at the intended rollout gate (10% or 50%).
+- Failure traffic must still be active when the gate AnalysisRun samples metrics.
 - k6 Jobs keep completed resources for up to 1 hour (`ttlSecondsAfterFinished: 3600`) to support evidence collection.

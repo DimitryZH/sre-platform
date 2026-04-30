@@ -1,0 +1,4 @@
+$ kubectl -n online-shop-dev get pods -l app.kubernetes.io/name=online-shop-k6 -o wide
+NAME                                READY   STATUS      RESTARTS   AGE   IP             NODE                                              NOMINATED NODE   READINESS GATES
+online-shop-load-baseline-hfrxf     0/1     Completed   0          56m   10.124.0.212   gke-ecommerce-observability-chaos-4d4c6a15-w2pw   <none>           <none>
+online-shop-load-failure-50-wjwll   0/1     Completed   0          43m   10.124.0.214   gke-ecommerce-observability-chaos-4d4c6a15-w2pw   <none>           <none>

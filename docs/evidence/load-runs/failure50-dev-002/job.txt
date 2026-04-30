@@ -1,0 +1,65 @@
+$ kubectl -n online-shop-dev get job online-shop-load-failure-50 -o wide
+NAME                          STATUS     COMPLETIONS   DURATION   AGE   CONTAINERS   IMAGES              SELECTOR
+online-shop-load-failure-50   Complete   1/1           5m9s       43m   k6           grafana/k6:0.49.0   batch.kubernetes.io/controller-uid=78d87d65-146b-46cc-9b2b-55f25f62b083
+
+$ kubectl -n online-shop-dev describe job online-shop-load-failure-50
+Name:                        online-shop-load-failure-50
+Namespace:                   online-shop-dev
+Selector:                    batch.kubernetes.io/controller-uid=78d87d65-146b-46cc-9b2b-55f25f62b083
+Labels:                      app.kubernetes.io/component=failure-test
+                             app.kubernetes.io/name=online-shop-k6
+                             app.kubernetes.io/part-of=online-shop
+Annotations:                 <none>
+Parallelism:                 1
+Completions:                 1
+Completion Mode:             NonIndexed
+Suspend:                     false
+Backoff Limit:               0
+TTL Seconds After Finished:  3600
+Start Time:                  Thu, 30 Apr 2026 14:09:45 -0400
+Completed At:                Thu, 30 Apr 2026 14:14:54 -0400
+Duration:                    5m9s
+Pods Statuses:               0 Active (0 Ready) / 1 Succeeded / 0 Failed
+Pod Template:
+  Labels:  app.kubernetes.io/component=failure-test
+           app.kubernetes.io/name=online-shop-k6
+           app.kubernetes.io/part-of=online-shop
+           batch.kubernetes.io/controller-uid=78d87d65-146b-46cc-9b2b-55f25f62b083
+           batch.kubernetes.io/job-name=online-shop-load-failure-50
+           controller-uid=78d87d65-146b-46cc-9b2b-55f25f62b083
+           job-name=online-shop-load-failure-50
+  Containers:
+   k6:
+    Image:      grafana/k6:0.49.0
+    Port:       <none>
+    Host Port:  <none>
+    Args:
+      run
+      /scripts/failure.js
+    Limits:
+      cpu:     700m
+      memory:  384Mi
+    Requests:
+      cpu:     150m
+      memory:  192Mi
+    Environment:
+      TARGET_URL:      http://ingress-nginx-controller.ingress-nginx.svc.cluster.local
+      FAILURE_PATH:    /break
+      SCENARIO_LABEL:  failure-50
+      VUS:             20
+      DURATION:        5m
+      SLEEP_SECONDS:   0.1
+    Mounts:
+      /scripts from scripts (rw)
+  Volumes:
+   scripts:
+    Type:          ConfigMap (a volume populated by a ConfigMap)
+    Name:          online-shop-k6-scripts
+    Optional:      false
+  Node-Selectors:  <none>
+  Tolerations:     <none>
+Events:
+  Type    Reason            Age   From            Message
+  ----    ------            ----  ----            -------
+  Normal  SuccessfulCreate  43m   job-controller  Created pod: online-shop-load-failure-50-wjwll
+  Normal  Completed         38m   job-controller  Job completed

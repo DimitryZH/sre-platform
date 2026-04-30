@@ -1,0 +1,10 @@
+$ kubectl -n online-shop-dev get analysisrun --sort-by=.metadata.creationTimestamp
+NAME                       STATUS         AGE
+frontend-5d6575d596-15-2   Inconclusive   4h7m
+frontend-5445cfcc85-16-2   Successful     3h39m
+frontend-5445cfcc85-16-5   Successful     3h35m
+frontend-ff7d875c-17-2     Failed         3h18m
+frontend-84688c7c5c-18-2   Successful     73m
+frontend-84688c7c5c-18-5   Inconclusive   69m
+frontend-77c595457b-19-2   Successful     46m
+frontend-77c595457b-19-5   Failed         42m

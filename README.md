@@ -72,6 +72,45 @@ Artifacts:
 - CLI Evidence: [`docs/evidence/slo_gated_rollout_cli_excerpts_dev.md`](docs/evidence/slo_gated_rollout_cli_excerpts_dev.md)
 
 
+## Load and Failure Testing with k6
+
+k6 is used to run deterministic, repeatable traffic scenarios that directly validate SLO-driven rollout decisions in `online-shop-dev`.
+
+Validated usage:
+- baseline traffic maintains a healthy denominator for SLO evaluation
+- failure-10 and failure-50 scenarios simulate controlled error conditions
+- each scenario maps directly to a rollout promotion gate (10% and 50%)
+- SLO breaches trigger automated abort decisions during canary rollout
+- run evidence is captured under [`docs/evidence/load-runs/`](docs/evidence/load-runs/)
+
+Scenarios are deterministic and aligned with rollout analysis windows to ensure reproducible SLO evaluation.
+
+Scenario mapping:
+- `baseline` → healthy steady-state traffic (no SLO impact)
+- `failure-10` → early-stage SLO breach at 10% canary gate
+- `failure-50` → mid-rollout SLO breach at 50% canary gate
+
+Operator guide:
+- [`k6/README.md`](k6/README.md)
+- [`docs/case-study/slo_rollout_demo.md`](docs/case-study/slo_rollout_demo.md)
+- [`docs/evidence/slo_gated_rollout_evidence_dev.md`](docs/evidence/slo_gated_rollout_evidence_dev.md)
+
+
+
+```mermaid
+flowchart LR
+    K6[k6 Load / Failure Jobs] --> Ingress[Ingress]
+    Ingress --> App[online-shop frontend]
+    App --> Metrics[Ingress / App Metrics]
+    Metrics --> Prometheus[Prometheus SLO Rules]
+    Prometheus --> Analysis[Argo Rollouts AnalysisRun]
+    Analysis --> Decision{SLO Gate Decision}
+    Decision -->|Healthy| Promote[Promote Canary]
+    Decision -->|SLO Breach| Abort[Abort Rollout]
+```
+
+
+
 ## Core capabilities
 
 ### GitOps deployment
@@ -175,12 +214,13 @@ The platform is designed for deterministic, repeatable failure tests. A typical 
   - [`docs/load-to-slo-timeline.md`](docs/load-to-slo-timeline.md)
 
 - [`k6/`](k6/)
-  - [`k6/k8s-base.yaml`](k6/k8s-base.yaml)
-  - [`k6/job-baseline.yaml`](k6/job-baseline.yaml)
-  - [`k6/job-spike.yaml`](k6/job-spike.yaml)
-  - [`k6/job-sustained.yaml`](k6/job-sustained.yaml)
-  - [`k6/chaos-load/checkout-spike.js`](k6/chaos-load/checkout-spike.js)
-  - [`k6/chaos-load/sustained-load.js`](k6/chaos-load/sustained-load.js)
+  - [`k6/README.md`](k6/README.md)
+  - [`k6/scripts/baseline.js`](k6/scripts/baseline.js)
+  - [`k6/scripts/failure.js`](k6/scripts/failure.js)
+  - [`k6/scripts/capture_load_run_evidence.sh`](k6/scripts/capture_load_run_evidence.sh)
+  - [`k6/k8s/job-baseline.yaml`](k6/k8s/job-baseline.yaml)
+  - [`k6/k8s/job-failure-10.yaml`](k6/k8s/job-failure-10.yaml)
+  - [`k6/k8s/job-failure-50.yaml`](k6/k8s/job-failure-50.yaml)
 
 - [`observability/`](observability/)
   - [`observability/slo/checkout-slo.yaml`](observability/slo/checkout-slo.yaml)

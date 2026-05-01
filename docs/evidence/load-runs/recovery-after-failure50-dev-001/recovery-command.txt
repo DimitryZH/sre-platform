@@ -1,0 +1,11 @@
+Recovery commands used:
+1) kubectl patch rollout frontend -n online-shop-dev --type merge --patch-file C:\tmp\rollout-recovery-after-f50.json
+2) make load-baseline
+3) make load-clean
+4) kubectl -n online-shop-dev create configmap online-shop-k6-scripts --from-file=k6/scripts --dry-run=client -o yaml | kubectl apply -f -
+5) kubectl apply -f C:\tmp\k6-baseline-recovery.yaml
+6) kubectl patch rollout frontend -n online-shop-dev --type merge --patch-file C:\tmp\rollout-recovery-after-f50-lowload.json
+
+Notes:
+- Default baseline (20 VUs) repeatedly produced intermittent 5xx and re-aborted first gate.
+- Recovery succeeded with temporary low-load baseline job (5 VUs) to keep denominator healthy through both gates.

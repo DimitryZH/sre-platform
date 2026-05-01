@@ -1,0 +1,146 @@
+$ kubectl -n online-shop-dev get rollout frontend
+NAME       DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+frontend   1         1         1            1           9d
+
+$ kubectl -n online-shop-dev get rollout frontend -o yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  annotations:
+    argocd.argoproj.io/tracking-id: online-shop-dev:argoproj.io/Rollout:online-shop-dev/frontend
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"argoproj.io/v1alpha1","kind":"Rollout","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"online-shop-dev:argoproj.io/Rollout:online-shop-dev/frontend"},"labels":{"app.kubernetes.io/name":"frontend","app.kubernetes.io/part-of":"online-shop"},"name":"frontend","namespace":"online-shop-dev"},"spec":{"replicas":1,"revisionHistoryLimit":3,"selector":{"matchLabels":{"app.kubernetes.io/name":"frontend"}},"strategy":{"canary":{"canaryService":"frontend-canary","stableService":"frontend","steps":[{"setWeight":10},{"pause":{"duration":"7m"}},{"analysis":{"templates":[{"templateName":"frontend-slo-check"}]}},{"setWeight":50},{"pause":{"duration":"2m"}},{"analysis":{"templates":[{"templateName":"frontend-slo-check"}]}},{"setWeight":100}],"trafficRouting":{"nginx":{"stableIngress":"online-shop-frontend"}}}},"template":{"metadata":{"labels":{"app.kubernetes.io/name":"frontend","app.kubernetes.io/part-of":"online-shop"}},"spec":{"containers":[{"envFrom":[{"configMapRef":{"name":"frontend-config","optional":true}},{"secretRef":{"name":"frontend-secret","optional":true}}],"image":"docker.io/dmitryzhuravlev/online-shop-frontend:v0.10.4","imagePullPolicy":"IfNotPresent","livenessProbe":{"failureThreshold":5,"httpGet":{"path":"/","port":"http"},"initialDelaySeconds":15,"periodSeconds":20,"timeoutSeconds":3},"name":"frontend","ports":[{"containerPort":8080,"name":"http"}],"readinessProbe":{"failureThreshold":6,"httpGet":{"path":"/","port":"http"},"initialDelaySeconds":5,"periodSeconds":10,"timeoutSeconds":3}}]}}}}
+    rollout.argoproj.io/revision: "22"
+  creationTimestamp: "2026-04-21T20:51:45Z"
+  generation: 27
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/part-of: online-shop
+  name: frontend
+  namespace: online-shop-dev
+  resourceVersion: "1777583890037423012"
+  uid: 6f6b3eb7-f122-4bab-a7ad-e21a88db2144
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+  strategy:
+    canary:
+      canaryService: frontend-canary
+      stableService: frontend
+      steps:
+      - setWeight: 10
+      - pause:
+          duration: 7m
+      - analysis:
+          analysisRunMetadata: {}
+          templates:
+          - templateName: frontend-slo-check
+      - setWeight: 50
+      - pause:
+          duration: 2m
+      - analysis:
+          analysisRunMetadata: {}
+          templates:
+          - templateName: frontend-slo-check
+      - setWeight: 100
+      trafficRouting:
+        nginx:
+          stableIngress: online-shop-frontend
+  template:
+    metadata:
+      annotations:
+        rollout-trigger: "2026-04-30T17:04:18.2244313-04:00"
+      labels:
+        app.kubernetes.io/name: frontend
+        app.kubernetes.io/part-of: online-shop
+    spec:
+      containers:
+      - envFrom:
+        - configMapRef:
+            name: frontend-config
+            optional: true
+        - secretRef:
+            name: frontend-secret
+            optional: true
+        image: docker.io/dmitryzhuravlev/online-shop-frontend:v0.10.4
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 5
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 3
+        name: frontend
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 6
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+        resources: {}
+status:
+  HPAReplicas: 1
+  availableReplicas: 1
+  blueGreen: {}
+  canary:
+    weights:
+      canary:
+        podTemplateHash: 75b67dcc55
+        serviceName: frontend-canary
+        weight: 0
+      stable:
+        podTemplateHash: 75b67dcc55
+        serviceName: frontend
+        weight: 100
+  conditions:
+  - lastTransitionTime: "2026-04-30T20:49:32Z"
+    lastUpdateTime: "2026-04-30T20:49:32Z"
+    message: Rollout has minimum availability
+    reason: AvailableReason
+    status: "True"
+    type: Available
+  - lastTransitionTime: "2026-04-30T21:15:35Z"
+    lastUpdateTime: "2026-04-30T21:15:35Z"
+    message: Rollout is paused
+    reason: RolloutPaused
+    status: "False"
+    type: Paused
+  - lastTransitionTime: "2026-04-30T21:17:38Z"
+    lastUpdateTime: "2026-04-30T21:17:38Z"
+    message: RolloutCompleted
+    reason: RolloutCompleted
+    status: "True"
+    type: Completed
+  - lastTransitionTime: "2026-04-30T21:18:10Z"
+    lastUpdateTime: "2026-04-30T21:18:10Z"
+    message: Rollout is healthy
+    reason: RolloutHealthy
+    status: "True"
+    type: Healthy
+  - lastTransitionTime: "2026-04-30T21:15:35Z"
+    lastUpdateTime: "2026-04-30T21:18:10Z"
+    message: ReplicaSet "frontend-75b67dcc55" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  currentPodHash: 75b67dcc55
+  currentStepHash: 6b7c46589
+  currentStepIndex: 7
+  observedGeneration: "27"
+  phase: Healthy
+  readyReplicas: 1
+  replicas: 1
+  selector: app.kubernetes.io/name=frontend
+  stableRS: 75b67dcc55
+  updatedReplicas: 1

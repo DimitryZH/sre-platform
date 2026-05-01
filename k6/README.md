@@ -72,15 +72,32 @@ What these targets do:
 
 1. Start baseline traffic:
    `make load-baseline RUN_ID=<run-id>`
-2. For first-gate failure validation, start:
-   `make load-failure-10 RUN_ID=<run-id>` when rollout is at the 10% gate.
+2. Validate 10% gate abort:
+   start `make load-failure-10 RUN_ID=<run-id>` when rollout is at the 10% gate.
    Keep failure traffic active through the first `frontend-slo-check` sampling interval.
-3. For second-gate failure validation, start:
-   `make load-failure-50 RUN_ID=<run-id>` after first gate success and at the 50% gate.
+3. Validate 50% gate abort:
+   start `make load-failure-50 RUN_ID=<run-id>` only after first gate success and when rollout is at the 50% gate.
 4. Capture run evidence:
    `make load-capture-baseline RUN_ID=<run-id>` or scenario-specific capture target.
 5. Clean up jobs when complete:
    `make load-clean`
+
+---
+
+## Recovery After Abort
+
+Use the same operator recovery method used during validation:
+
+1. Retrigger rollout with annotation-only patch (no rollout manifest edits).
+2. Keep healthy denominator traffic active during gate analysis (`make load-baseline`).
+3. If recovery retrigger becomes `Inconclusive` or re-aborts under default baseline load, run a lower-VU recovery baseline using the same `k6/scripts/baseline.js` script.
+4. After failure traffic tests, wait for the 5-minute SLO window to clear before retrying recovery, then retrigger again.
+5. Confirm final state:
+   - `phase=Healthy`
+   - `abort=false`
+   - `stable=100`
+   - `canary=0`
+   - latest gate AnalysisRuns are `Successful`
 
 ---
 

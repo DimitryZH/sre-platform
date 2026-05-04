@@ -12,6 +12,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: online-shop-stage
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=true
   sources:

@@ -5,16 +5,30 @@ prometheus:
       matchLabels:
         release: monitoring
     serviceMonitorNamespaceSelector:
-      matchNames:
-        - online-shop-dev
-        - online-shop-stage
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - ingress-nginx
+            - online-shop-dev
+            - online-shop-stage
 
     ruleSelector:
       matchLabels:
         release: monitoring
     ruleNamespaceSelector:
-      matchNames:
-        - monitoring
-        - online-shop-dev
-        - online-shop-stage
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - monitoring
+            - online-shop-dev
+            - online-shop-stage
 
+# Avoid ArgoCD deadlocks on kube-prometheus admission hook Jobs/RBAC in bootstrap.
+prometheusOperator:
+  admissionWebhooks:
+    # Keep webhook validation non-blocking while patch hooks are disabled.
+    failurePolicy: Ignore
+    patch:
+      enabled: false

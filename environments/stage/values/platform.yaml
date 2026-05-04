@@ -1,12 +1,32 @@
-# STAGE overlay
+# STAGE environment overlay (converged with validated dev baseline).
 global:
   namespace: online-shop-stage
   domain: stage.example.com
 
-# In Stage, we might want to test specific tags, but generally mirror prod.
 frontend:
-  replicaCount: 2
+  replicaCount: 1
+  ingress:
+    # Keep catch-all ingress for direct LoadBalancer IP validation.
+    useHost: false
+  rollouts:
+    enabled: true
+  image:
+    tag: v0.10.4
+
+cart:
+  replicaCount: 1
+  image:
+    tag: v0.10.4
+
+checkout:
+  replicaCount: 1
+  image:
+    tag: v0.10.4
+
+payment:
+  replicaCount: 1
+  image:
+    tag: v0.10.4
 
 rollouts:
-  analysis:
-    prometheusAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090
+  enabled: true

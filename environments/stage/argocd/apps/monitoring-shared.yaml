@@ -1,4 +1,4 @@
-# Shared monitoring stack placeholder (manual sync).
+# Shared monitoring stack (dev+stage). Stage auto-sync enabled.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -12,9 +12,15 @@ spec:
     server: https://kubernetes.default.svc
     namespace: monitoring
   syncPolicy:
-    # Intentionally manual for now (no syncPolicy.automated).
+    automated:
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      # Needed for large CRDs (kube-prometheus-stack) to avoid client-side apply annotation size limits.
+      - ServerSideApply=true
+      # Use replace semantics for large CRDs to avoid apply annotation-size limits during bootstrap.
+      - Replace=true
   # ArgoCD multi-source application:
   # - Source 1: upstream chart
   # - Source 2: this repo, providing the values file(s)

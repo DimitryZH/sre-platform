@@ -18,7 +18,7 @@ metadata:
   annotations:
     # Rewrite non-root prefixed routes to root paths for frontend apps that serve from `/`.
     nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: "/$2"
+    nginx.ingress.kubernetes.io/rewrite-target: "/$1"
   {{- end }}
 spec:
   ingressClassName: nginx
@@ -28,7 +28,7 @@ spec:
       {{- end }}
       http:
         paths:
-          - path: {{- if $usePrefixRewrite }} {{ printf "%s(/|$)(.*)" $normalizedPrefix | quote }} {{- else }} {{ $pathPrefix | quote }} {{- end }}
+          - path: {{- if $usePrefixRewrite }} {{ printf "%s(?:/(?!break(?:$|/))|$)(.*)" $normalizedPrefix | quote }} {{- else }} {{ $pathPrefix | quote }} {{- end }}
             pathType: {{- if $usePrefixRewrite }} ImplementationSpecific {{- else }} Prefix {{- end }}
             backend:
               service:

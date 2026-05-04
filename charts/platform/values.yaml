@@ -4,6 +4,9 @@ frontend:
   ingress:
     # Keep host-based ingress by default; dev overlay may disable for direct LB IP access.
     useHost: true
+    # Optional path prefix for DNS-free multi-environment fanout on a shared ingress controller.
+    # Examples: "/" (default), "/stage"
+    pathPrefix: /
   deployment:
     # Frontend is managed by Argo Rollouts (Rollout resource), not a Deployment.
     enabled: true

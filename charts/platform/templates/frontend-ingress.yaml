@@ -1,5 +1,6 @@
 {{- $host := (printf "frontend.%s" (.Values.global.domain | default "example.com")) -}}
 {{- $useHost := .Values.frontend.ingress.useHost -}}
+{{- $pathPrefix := (.Values.frontend.ingress.pathPrefix | default "/") -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -16,7 +17,7 @@ spec:
       {{- end }}
       http:
         paths:
-          - path: /
+          - path: {{ $pathPrefix | quote }}
             pathType: Prefix
             backend:
               service:

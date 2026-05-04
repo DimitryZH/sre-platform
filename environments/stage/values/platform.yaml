@@ -1,7 +1,6 @@
 # STAGE environment overlay (converged with validated dev baseline).
 global:
   namespace: online-shop-stage
-  domain: stage.example.com
 
 frontend:
   replicaCount: 1

@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: stage-prom-precheck
+  namespace: online-shop-stage
+spec:
+  restartPolicy: Never
+  containers:
+    - name: check
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - |
+          echo ER5
+          wget -qO- --post-data 'query=slo:error_ratio_5m' http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+          echo
+          echo BR5
+          wget -qO- --post-data 'query=slo:burn_rate_5m' http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+          echo
+          echo RATE5
+          wget -qO- --post-data 'query=sum(rate(nginx_ingress_controller_requests{exported_namespace="online-shop-stage",status!=""}[5m]))' http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/query
+          echo

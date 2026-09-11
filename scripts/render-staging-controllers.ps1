@@ -71,7 +71,30 @@ try {
     throw "The ApplicationSet controller must render exactly once with zero replicas."
   }
 
+  $ingressDocuments = (Get-Content -Raw -Path $ingressOutput) -split "(?m)^---\s*$"
+  $ingressServiceMonitors = @($ingressDocuments | Where-Object { $_ -match '(?m)^kind: ServiceMonitor$' })
+  if ($ingressServiceMonitors.Count -ne 0) {
+    throw "The initial ingress-nginx installation must not render a ServiceMonitor."
+  }
+
+  $metricsService = @($ingressDocuments | Where-Object {
+    $_ -match '(?m)^kind: Service\r?$' -and
+    $_ -match '(?m)^  name: ingress-nginx-controller-metrics\r?$' -and
+    $_ -match '(?m)^    - name: metrics\r?$' -and
+    $_ -match '(?m)^      port: 10254\r?$'
+  })
+  if ($metricsService.Count -ne 1) {
+    throw "The initial ingress-nginx render must contain exactly one metrics Service with the reviewed contract."
+  }
+
+  $ingressValuesText = Get-Content -Raw -Path $ingressValues
+  if ($ingressValuesText -notmatch '(?ms)metrics:\s*\r?\n\s*enabled:\s*true' -or
+      $ingressValuesText -notmatch '(?ms)serviceMonitor:\s*\r?\n\s*#.*\r?\n\s*enabled:\s*false') {
+    throw "Ingress metrics must remain enabled while the initial ServiceMonitor is disabled."
+  }
+
   Write-Output "Pinned controller rendering passed with isolated Helm configuration."
+  Write-Output "Initial ingress-nginx render has metrics and no ServiceMonitor."
   Write-Output "Argo CD render: $argoOutput"
   Write-Output "ingress-nginx render: $ingressOutput"
 }

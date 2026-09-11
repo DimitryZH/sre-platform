@@ -44,13 +44,17 @@ All Helm reads and renders used isolated temporary Helm configuration/cache and 
 | Platform chart `0.1.0` | 10 Deployments, 1 Rollout, 13 Services, 11 ServiceMonitors, 2 PrometheusRules, 12 chart-generated Secrets, 12 ConfigMaps, 1 internal Ingress | No LoadBalancer or PVC; `break` and `loadgenerator` Deployments disabled |
 | Argo Rollouts `2.32.0` | 1 Deployment, 5 CRDs, 4 ClusterRoles, 1 ClusterRoleBinding | No LoadBalancer, PVC, Ingress, or Job |
 | kube-prometheus-stack `65.5.1` | 2 Deployments, 1 Prometheus, 10 CRDs, 35 PrometheusRules, 10 ServiceMonitors | No DaemonSet, LoadBalancer, Ingress, or Job; the Prometheus CR declares one expected 2Gi volume-claim template |
-| Argo CD `7.8.28` / ingress-nginx `4.12.1` | Reused Issue #9 isolated render evidence | ClusterIP-only controller exposure |
+| Argo CD `7.8.28` | Reused Issue #9 isolated render evidence | ClusterIP-only controller exposure |
+| Initial ingress-nginx `4.12.1` | 1 Deployment, 1 metrics Service, 1 ConfigMap, 1 ServiceAccount, 1 Role, 1 RoleBinding, 1 ClusterRole, 1 ClusterRoleBinding, 1 IngressClass; 0 ServiceMonitors | No Secret, PVC, Ingress, LoadBalancer Service, public endpoint, or additional controller |
+| GitOps ingress metrics after monitoring is healthy | 1 ServiceMonitor selecting the pinned metrics Service on port `metrics` every 30 seconds | No Secret, PVC, Ingress, LoadBalancer Service, public endpoint, RBAC, or controller |
 
 The application has explicit requests/limits for all 11 scheduled workloads. Its steady request total is 600m CPU and 1216Mi memory; the frontend canary peak adds 75m CPU and 128Mi memory. The controllers and constrained observability profile retain the Issue #7 planned envelope: 950m CPU and 1472Mi memory long-running platform requests, plus one 50m CPU / 64Mi temporary hook allowance.
 
 The static render contains no standalone PVC object. During Pass B, the approved Prometheus reconciliation may create exactly one expected 2Gi PVC and its backing storage from the reviewed volume-claim template. That storage is in the Pass B approval scope and must be verified after reconciliation. Any additional PVC, storage class, storage size, or storage resource is a stop condition.
 
 Grafana is intentionally disabled in the constrained first slice. Pass B validates Prometheus, ServiceMonitors, PrometheusRules, and the reviewed dashboard JSON/input; it does not claim live visual Grafana-dashboard validation. Grafana UI activation is deferred and does not block the SLO/recovery validation path.
+
+The app-of-apps dependency order is explicit: `monitoring-stage` wave `-2`, `argo-rollouts-stage` wave `-1`, then `ingress-nginx-metrics-stage` and `online-shop-stage` wave `1`. Monitoring must become healthy before either ServiceMonitor-bearing child is reconciled; Argo Rollouts must be healthy before the application creates its Rollout resources.
 
 ## Cost, Window, And Pass B Handoff
 

@@ -4,12 +4,12 @@ Date: 2026-09-07
 
 ## Scope
 
-This began as a read-only preflight for the existing `sre-platform-staging-507220` foundation. Imports and one separately approved apply were subsequently completed; the apply was limited to project labels and state-bucket labels plus bounded, non-locked retention.
+This began as a read-only preflight for the existing approved staging foundation. Imports and one separately approved apply were subsequently completed; the apply was limited to project labels and state-bucket labels plus bounded, non-locked retention.
 
 ## Verified Invariants
 
 - An active gcloud authentication state was present; account identity details were not recorded.
-- The configured project and explicit target both resolved to `sre-platform-staging-507220`.
+- The configured project and explicit target both resolved to the approved staging target.
 - The target project was active and had the existing foundation labels.
 - Billing was enabled. One existing 100 CAD budget was scoped to exactly that project through its numeric project reference.
 - The billing boundary retained `roles/billing.costsManager`; broad `roles/billing.admin` and public principals were absent.

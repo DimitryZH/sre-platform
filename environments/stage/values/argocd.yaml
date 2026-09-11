@@ -17,6 +17,25 @@ applicationSet:
 redis-ha:
   enabled: false
 
+# Kubernetes can report this Deployment status field before the pinned Argo CD
+# version's diff schema recognizes it. It is status-only and never desired state.
+configs:
+  cm:
+    resource.customizations.ignoreDifferences.apps_Deployment: |
+      jqPathExpressions:
+        - .status.terminatingReplicas
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil and obj.status.health ~= nil then
+        hs.status = obj.status.health.status
+        if obj.status.health.message ~= nil then
+          hs.message = obj.status.health.message
+        end
+      end
+      return hs
+
 controller:
   resources:
     requests:
@@ -27,15 +46,15 @@ controller:
       memory: 512Mi
 
 repoServer:
-  # The chart applies this block to both repo-server and copyutil containers.
-  # Their combined request stays within the reviewed 100m / 128Mi envelope.
+  # Manifest generation exceeded the previous 128Mi limit. Keep the reviewed
+  # CPU request while reserving a bounded, single-Pod memory envelope.
   resources:
     requests:
-      cpu: 50m
-      memory: 64Mi
+      cpu: 100m
+      memory: 256Mi
     limits:
-      cpu: 125m
-      memory: 128Mi
+      cpu: 250m
+      memory: 384Mi
 
 server:
   ingress:

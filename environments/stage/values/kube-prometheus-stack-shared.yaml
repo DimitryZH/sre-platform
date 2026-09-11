@@ -28,7 +28,8 @@ prometheus:
 # Avoid ArgoCD deadlocks on kube-prometheus admission hook Jobs/RBAC in bootstrap.
 prometheusOperator:
   admissionWebhooks:
-    # Keep webhook validation non-blocking while patch hooks are disabled.
-    failurePolicy: Ignore
+    # This constrained baseline does not need admission validation. Disabling
+    # the webhook avoids a TLS Secret dependency when patch hooks are off.
+    enabled: false
     patch:
       enabled: false

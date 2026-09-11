@@ -52,7 +52,7 @@ The Argo CD cluster-scoped RBAC is expected for application reconciliation. ingr
 | Component | Steady-state request | Limit |
 | --- | --- | --- |
 | Argo CD application controller | 200m CPU / 256Mi memory | 500m CPU / 512Mi memory |
-| Argo CD repo server Pod, including copyutil | 100m CPU / 128Mi memory | 250m CPU / 256Mi memory |
+| Argo CD repo server Pod | 100m CPU / 256Mi memory | 250m CPU / 384Mi memory |
 | Argo CD API server | 75m CPU / 128Mi memory | 200m CPU / 256Mi memory |
 | Argo CD Redis | 50m CPU / 64Mi memory | 150m CPU / 128Mi memory |
 | ingress-nginx controller | 75m CPU / 128Mi memory | 250m CPU / 256Mi memory |

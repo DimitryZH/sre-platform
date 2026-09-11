@@ -48,13 +48,15 @@ All Helm reads and renders used isolated temporary Helm configuration/cache and 
 | Initial ingress-nginx `4.12.1` | 1 Deployment, 1 metrics Service, 1 ConfigMap, 1 ServiceAccount, 1 Role, 1 RoleBinding, 1 ClusterRole, 1 ClusterRoleBinding, 1 IngressClass; 0 ServiceMonitors | No Secret, PVC, Ingress, LoadBalancer Service, public endpoint, or additional controller |
 | GitOps ingress metrics after monitoring is healthy | 1 ServiceMonitor selecting the pinned metrics Service on port `metrics` every 30 seconds | No Secret, PVC, Ingress, LoadBalancer Service, public endpoint, RBAC, or controller |
 
-The application has explicit requests/limits for all 11 scheduled workloads. Its steady request total is 600m CPU and 1216Mi memory; the frontend canary peak adds 75m CPU and 128Mi memory. The controllers and constrained observability profile retain the Issue #7 planned envelope: 950m CPU and 1472Mi memory long-running platform requests, plus one 50m CPU / 64Mi temporary hook allowance.
+The application has explicit requests/limits for all 11 scheduled workloads. Its steady request total is 600m CPU and 1216Mi memory; the frontend canary peak adds 75m CPU and 128Mi memory. The controllers and constrained observability profile use 950m CPU and 1600Mi memory long-running platform requests, plus one 50m CPU / 64Mi temporary hook allowance. The repo-server allowance was raised after a bounded manifest-generation OOM restart; the temporary node capacity still exceeds the combined reviewed peak.
 
 The static render contains no standalone PVC object. During Pass B, the approved Prometheus reconciliation may create exactly one expected 2Gi PVC and its backing storage from the reviewed volume-claim template. That storage is in the Pass B approval scope and must be verified after reconciliation. Any additional PVC, storage class, storage size, or storage resource is a stop condition.
 
 Grafana is intentionally disabled in the constrained first slice. Pass B validates Prometheus, ServiceMonitors, PrometheusRules, and the reviewed dashboard JSON/input; it does not claim live visual Grafana-dashboard validation. Grafana UI activation is deferred and does not block the SLO/recovery validation path.
 
 The app-of-apps dependency order is explicit: `monitoring-stage` wave `-2`, `argo-rollouts-stage` wave `-1`, then `ingress-nginx-metrics-stage` and `online-shop-stage` wave `1`. Monitoring must become healthy before either ServiceMonitor-bearing child is reconciled; Argo Rollouts must be healthy before the application creates its Rollout resources.
+
+The direct ingress controller is scoped to `online-shop-stage`. That namespace must exist before the initial ingress-nginx release is installed, while it is still empty of application workloads; otherwise the controller exits before it becomes ready.
 
 ## Cost, Window, And Pass B Handoff
 

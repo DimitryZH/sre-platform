@@ -10,12 +10,18 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: argo-rollouts
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jqPathExpressions:
+        - .status.terminatingReplicas
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - RespectIgnoreDifferences=true
   sources:
     - repoURL: https://argoproj.github.io/argo-helm
       chart: argo-rollouts

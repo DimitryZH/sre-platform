@@ -46,6 +46,7 @@ try {
 
   $argoRender = & helm template argo-cd $argoChart --namespace argocd --kube-version $kubernetesVersion --include-crds -f $argoValues
   if ($LASTEXITCODE -ne 0) { throw "Argo CD render failed." }
+  $argoRenderText = $argoRender -join [Environment]::NewLine
   [System.IO.File]::WriteAllText($argoOutput, (($argoRender -join [Environment]::NewLine) + [Environment]::NewLine))
 
   $ingressRender = & helm template ingress-nginx $ingressChart --namespace ingress-nginx --kube-version $kubernetesVersion --include-crds -f $ingressValues
@@ -69,6 +70,14 @@ try {
   $applicationSetPattern = '(?ms)^kind: Deployment\r?\n.*?^  name: .*applicationset-controller\r?\n.*?^  replicas: 0\r?$'
   if ($combinedRender -notmatch $applicationSetPattern) {
     throw "The ApplicationSet controller must render exactly once with zero replicas."
+  }
+
+  if ($argoRenderText -notmatch '(?ms)resource\.customizations\.ignoreDifferences\.apps_Deployment:\s*\|.*?\.status\.terminatingReplicas') {
+    throw "The Argo CD Deployment status compatibility customization must render."
+  }
+
+  if ($argoRenderText -notmatch '(?ms)resource\.customizations\.health\.argoproj\.io_Application:\s*\|.*?hs\.status = "Progressing".*?return hs') {
+    throw "The Argo CD Application health customization must render."
   }
 
   $ingressDocuments = (Get-Content -Raw -Path $ingressOutput) -split "(?m)^---\s*$"

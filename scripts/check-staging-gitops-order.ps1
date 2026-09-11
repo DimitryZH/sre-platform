@@ -65,4 +65,20 @@ foreach ($forbiddenKind in @("Secret", "PersistentVolumeClaim", "Ingress", "Serv
   }
 }
 
+foreach ($applicationName in @("monitoring-stage.yaml", "argo-rollouts-stage.yaml", "online-shop-stage.yaml")) {
+  $applicationText = Get-ApplicationText $applicationName
+  if ($applicationText -notmatch '(?ms)ignoreDifferences:\s*\r?\n\s*- group:\s*apps\s*\r?\n\s*kind:\s*Deployment\s*\r?\n\s*jqPathExpressions:\s*\r?\n\s*- \.status\.terminatingReplicas') {
+    throw "Deployment status compatibility rule is missing from $applicationName."
+  }
+  if ($applicationText -notmatch 'RespectIgnoreDifferences=true') {
+    throw "RespectIgnoreDifferences sync option is missing from $applicationName."
+  }
+}
+
+$monitoringValuesFile = Join-Path $repositoryRoot "environments\stage\values\kube-prometheus-stack-shared.yaml"
+$monitoringValuesText = Get-Content -Raw -Path $monitoringValuesFile
+if ($monitoringValuesText -notmatch '(?ms)admissionWebhooks:\s*\r?\n\s*#.*\r?\n\s*#.*\r?\n\s*enabled:\s*false\s*\r?\n\s*patch:\s*\r?\n\s*enabled:\s*false') {
+  throw "The constrained monitoring profile must disable admission webhooks and patch hooks."
+}
+
 Write-Output "Staging GitOps dependency-order guardrails passed."

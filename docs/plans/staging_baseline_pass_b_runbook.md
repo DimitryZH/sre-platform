@@ -10,10 +10,16 @@ The six-hour maximum applies only to the temporary `e2-standard-4` capacity wind
 
 ## Ordered Deployment
 
+Argo CD is pinned to a release that requires a status-only compatibility customization for Kubernetes Deployment `status.terminatingReplicas`. The customization is present in Argo CD and each Application that manages Deployments; it ignores only that live-status field during comparison and does not suppress desired-state differences or alter Deployment resources.
+
+The constrained monitoring profile disables the Prometheus Operator admission webhook as well as its patch hook. The baseline does not require admission validation, and this prevents an unapproved TLS Secret dependency.
+
+The app-of-apps root uses Application health assessment so each sync wave waits for the child Application's reported health. Without this assessment, child Applications can begin autonomous sync before their parent wave is released.
+
 1. Repeat the sanitized target, budget-boundary, IAM-boundary, workload, and public-exposure preflight. Stop if its outcome differs from Pass A.
 2. Verify the local plan checksum and run the temporary-capacity plan guardrail. Stop unless it contains one in-place default-node-pool update from `e2-medium` to `e2-standard-4`, two runtime API no-ops, and no cluster replacement or wider Terraform change.
 3. Apply the exact approved temporary-capacity plan. Verify the expected node-pool operation, node readiness, and live allocatable capacity before creating controllers or application workloads.
-4. Install ingress-nginx `4.12.1` with metrics enabled and its chart ServiceMonitor disabled, then install Argo CD `7.8.28`, using only the reviewed staging values from Issue #9. Verify their requests/limits, readiness, and ClusterIP-only Services after each operation.
+4. Ensure the scoped `online-shop-stage` namespace exists while it contains no application workloads. Install ingress-nginx `4.12.1` with metrics enabled and its chart ServiceMonitor disabled, then install Argo CD `7.8.28`, using only the reviewed staging values from Issue #9. Verify their requests/limits, readiness, and ClusterIP-only Services after each operation.
 5. Create the existing stage GitOps root. Its children reconcile in waves: `monitoring-stage` at `-2`, then `argo-rollouts-stage` at `-1`, then `ingress-nginx-metrics-stage` and `online-shop-stage` at `1`.
 6. Require `monitoring-stage` to become healthy before the ingress metrics ServiceMonitor or application reconcile. Require `argo-rollouts-stage` to become healthy before the application creates Rollout resources. The GitOps-managed ingress ServiceMonitor is the only resource in its child and selects the pinned ingress metrics Service on port `metrics` every 30 seconds.
 7. Verify application, controller, ServiceMonitor, PrometheusRule, and Prometheus readiness. Confirm exactly one expected 2Gi Prometheus PVC and its backing storage, six-hour retention, 1GiB retention size, 30-second scrape/rule intervals, and 10-second scrape timeout. Validate the reviewed dashboard JSON/input; Grafana remains disabled, so live visual Grafana-dashboard validation is not part of Pass B and Grafana UI activation does not block the SLO/recovery validation path.

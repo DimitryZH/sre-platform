@@ -6,13 +6,13 @@ This evidence records the read-only preflight for Issue #5. It does not authoriz
 
 ## Verified Foundation Boundary
 
-The configured gcloud project matched the explicit target `sre-platform-staging-507220`. The target project, existing `default` network, and existing `default` subnetwork in `us-central1` were reachable through explicit target-project read-only requests.
+The configured gcloud project matched the explicit approved staging target. The target project, existing `default` network, and existing `default` subnetwork in `us-central1` were reachable through explicit target-project read-only requests.
 
 The foundation state bucket retained uniform bucket-level access, enforced public access prevention, versioning, bounded 30-day retention, and the 7-day soft-delete policy. The earlier sanitized project IAM read confirmed no public principals and no `roles/billing.admin` binding. No foundation, IAM, or budget changes were made during this preflight.
 
 ## Budget Verification Exception
 
-The 100 CAD budget, scoped to `sre-platform-staging-507220`, was manually verified in Google Cloud Console for this issue only. The terminal Budget API path remains unresolved: it returned authorization and not-found responses from the current CLI context. Do not use that API path as evidence for this Issue #5 runtime apply decision.
+The 100 CAD budget, scoped to the approved staging target, was manually verified in Google Cloud Console for this issue only. The terminal Budget API path remains unresolved: it returned authorization and not-found responses from the current CLI context. Do not use that API path as evidence for this Issue #5 runtime apply decision.
 
 This exception does not authorize any budget change. Budget-management work must first restore and validate the terminal Budget API context through a separate approved task.
 

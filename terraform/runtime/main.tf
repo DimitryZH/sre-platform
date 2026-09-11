@@ -56,5 +56,15 @@ resource "google_container_cluster" "staging" {
   enable_shielded_nodes = true
   deletion_protection   = false
 
+  lifecycle {
+    precondition {
+      condition = (
+        (var.node_machine_type == "e2-medium" && !var.temporary_capacity_window) ||
+        (var.node_machine_type == "e2-standard-4" && var.temporary_capacity_window)
+      )
+      error_message = "e2-standard-4 is permitted only with the explicit temporary capacity-window gate; the baseline is e2-medium."
+    }
+  }
+
   depends_on = [google_project_service.runtime]
 }

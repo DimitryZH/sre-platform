@@ -2,10 +2,21 @@
 global:
   namespace: online-shop-stage
 
+# The resource policy is the reviewed Issue #7 minimum staging footprint.
+break:
+  enabled: false
+
+loadgenerator:
+  deployment:
+    enabled: false
+  monitoring:
+    serviceMonitor:
+      enabled: false
+
 frontend:
   replicaCount: 1
   ingress:
-    # Keep catch-all ingress for direct LoadBalancer IP validation.
+    # Hostless internal Ingress for later in-cluster or port-forward validation.
     useHost: false
     # Stage runs hostless on a shared ingress; use a unique path to avoid host "_" collisions with dev.
     pathPrefix: /stage
@@ -13,21 +24,79 @@ frontend:
     enabled: true
   image:
     tag: v0.10.4
+  resources:
+    requests:
+      cpu: 75m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
 
 cart:
   replicaCount: 1
   image:
     tag: v0.10.4
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 150m, memory: 256Mi }
 
 checkout:
   replicaCount: 1
   image:
     tag: v0.10.4
+  resources:
+    requests: { cpu: 75m, memory: 128Mi }
+    limits: { cpu: 250m, memory: 256Mi }
 
 payment:
   replicaCount: 1
   image:
     tag: v0.10.4
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { cpu: 150m, memory: 192Mi }
+
+adservice:
+  replicaCount: 1
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 150m, memory: 256Mi }
+
+currencyservice:
+  replicaCount: 1
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { cpu: 100m, memory: 128Mi }
+
+emailservice:
+  replicaCount: 1
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { cpu: 100m, memory: 128Mi }
+
+productcatalogservice:
+  replicaCount: 1
+  resources:
+    requests: { cpu: 75m, memory: 128Mi }
+    limits: { cpu: 250m, memory: 256Mi }
+
+recommendationservice:
+  replicaCount: 1
+  resources:
+    requests: { cpu: 75m, memory: 128Mi }
+    limits: { cpu: 250m, memory: 256Mi }
+
+redis:
+  replicaCount: 1
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 150m, memory: 256Mi }
+
+shippingservice:
+  replicaCount: 1
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { cpu: 150m, memory: 192Mi }
 
 rollouts:
   enabled: true

@@ -29,14 +29,20 @@ variable "subnetwork_name" {
 }
 
 variable "node_machine_type" {
-  description = "Fixed machine type for the single idle staging node."
+  description = "Machine type for the single staging node; e2-standard-4 is temporary-window only."
   type        = string
   default     = "e2-medium"
 
   validation {
-    condition     = var.node_machine_type == "e2-medium"
-    error_message = "The cost-bounded runtime baseline permits only one e2-medium node."
+    condition     = contains(["e2-medium", "e2-standard-4"], var.node_machine_type)
+    error_message = "The runtime permits only e2-medium or the separately approved temporary e2-standard-4 type."
   }
+}
+
+variable "temporary_capacity_window" {
+  description = "Explicit gate for the six-hour e2-standard-4 validation window."
+  type        = bool
+  default     = false
 }
 
 variable "runtime_labels" {

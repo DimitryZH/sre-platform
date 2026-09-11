@@ -1,0 +1,3 @@
+# Copy to an ignored local tfvars file only for the separately approved six-hour window.
+node_machine_type        = "e2-standard-4"
+temporary_capacity_window = true

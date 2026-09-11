@@ -1,0 +1,36 @@
+# Staging-only constrained observability profile for kube-prometheus-stack 65.5.1.
+grafana:
+  enabled: false
+
+alertmanager:
+  enabled: false
+
+kube-state-metrics:
+  enabled: false
+
+nodeExporter:
+  enabled: false
+
+prometheusOperator:
+  resources:
+    requests: { cpu: 75m, memory: 128Mi }
+    limits: { cpu: 250m, memory: 256Mi }
+
+prometheus:
+  prometheusSpec:
+    retention: 6h
+    retentionSize: 1GiB
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    scrapeTimeout: 10s
+    resources:
+      requests: { cpu: 300m, memory: 512Mi }
+      limits: { cpu: 750m, memory: 1Gi }
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 2Gi

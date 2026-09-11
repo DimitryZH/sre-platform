@@ -1,0 +1,5 @@
+# Reviewed staging input for argo/argo-rollouts 2.32.0.
+controller:
+  resources:
+    requests: { cpu: 75m, memory: 128Mi }
+    limits: { cpu: 200m, memory: 256Mi }

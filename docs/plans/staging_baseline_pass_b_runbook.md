@@ -10,6 +10,8 @@ The six-hour maximum applies only to the temporary `e2-standard-4` capacity wind
 
 ## Ordered Deployment
 
+Argo CD is pinned to a release that requires a status-only compatibility customization for Kubernetes Deployment `status.terminatingReplicas`. The customization ignores that live-status field during comparison; it does not suppress desired-state differences or alter Deployment resources.
+
 1. Repeat the sanitized target, budget-boundary, IAM-boundary, workload, and public-exposure preflight. Stop if its outcome differs from Pass A.
 2. Verify the local plan checksum and run the temporary-capacity plan guardrail. Stop unless it contains one in-place default-node-pool update from `e2-medium` to `e2-standard-4`, two runtime API no-ops, and no cluster replacement or wider Terraform change.
 3. Apply the exact approved temporary-capacity plan. Verify the expected node-pool operation, node readiness, and live allocatable capacity before creating controllers or application workloads.

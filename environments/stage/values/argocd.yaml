@@ -17,6 +17,14 @@ applicationSet:
 redis-ha:
   enabled: false
 
+# Kubernetes can report this Deployment status field before the pinned Argo CD
+# version's diff schema recognizes it. It is status-only and never desired state.
+configs:
+  cm:
+    resource.customizations.ignoreDifferences.apps_Deployment: |
+      jqPathExpressions:
+        - .status.terminatingReplicas
+
 controller:
   resources:
     requests:

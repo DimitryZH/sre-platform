@@ -10,7 +10,9 @@ The six-hour maximum applies only to the temporary `e2-standard-4` capacity wind
 
 ## Ordered Deployment
 
-Argo CD is pinned to a release that requires a status-only compatibility customization for Kubernetes Deployment `status.terminatingReplicas`. The customization ignores that live-status field during comparison; it does not suppress desired-state differences or alter Deployment resources.
+Argo CD is pinned to a release that requires a status-only compatibility customization for Kubernetes Deployment `status.terminatingReplicas`. The customization is present in Argo CD and each Application that manages Deployments; it ignores only that live-status field during comparison and does not suppress desired-state differences or alter Deployment resources.
+
+The constrained monitoring profile disables the Prometheus Operator admission webhook as well as its patch hook. The baseline does not require admission validation, and this prevents an unapproved TLS Secret dependency.
 
 1. Repeat the sanitized target, budget-boundary, IAM-boundary, workload, and public-exposure preflight. Stop if its outcome differs from Pass A.
 2. Verify the local plan checksum and run the temporary-capacity plan guardrail. Stop unless it contains one in-place default-node-pool update from `e2-medium` to `e2-standard-4`, two runtime API no-ops, and no cluster replacement or wider Terraform change.

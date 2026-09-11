@@ -16,7 +16,7 @@ loadgenerator:
 frontend:
   replicaCount: 1
   ingress:
-    # Keep catch-all ingress for direct LoadBalancer IP validation.
+    # Hostless internal Ingress for later in-cluster or port-forward validation.
     useHost: false
     # Stage runs hostless on a shared ingress; use a unique path to avoid host "_" collisions with dev.
     pathPrefix: /stage

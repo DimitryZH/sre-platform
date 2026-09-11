@@ -282,7 +282,7 @@ time the platform capabilities were implemented.
 
 The current target is:
 
-- Google Cloud project: `sre-platform-staging-507220`;
+- Google Cloud project: approved staging target;
 - cluster: `online-shop-staging`;
 - location model: Standard zonal GKE;
 - current node baseline: one fixed `e2-medium` node.

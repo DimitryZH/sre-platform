@@ -40,7 +40,7 @@ The application steady-state total is 600m CPU and 1216Mi memory. The controlled
 | --- | --- | --- |
 | ingress-nginx controller | 75m / 250m | 128Mi / 256Mi |
 | Argo CD application controller | 200m / 500m | 256Mi / 512Mi |
-| Argo CD repository server | 100m / 250m | 128Mi / 256Mi |
+| Argo CD repository server | 100m / 250m | 256Mi / 384Mi |
 | Argo CD server | 75m / 200m | 128Mi / 256Mi |
 | Argo CD Redis | 50m / 150m | 64Mi / 128Mi |
 | Argo Rollouts controller | 75m / 200m | 128Mi / 256Mi |
@@ -48,7 +48,7 @@ The application steady-state total is 600m CPU and 1216Mi memory. The controlled
 | Prometheus Operator | 75m / 250m | 128Mi / 256Mi |
 | Admission patch Job, temporary | 50m / 100m | 64Mi / 128Mi |
 
-The long-running platform-component subtotal is 950m CPU and 1472Mi memory. The 50m CPU and 64Mi admission patch Job is temporary and excluded from steady state. Combining the application subtotal with the long-running platform subtotal gives a steady-state footprint of 1550m CPU and 2688Mi memory. The peak, including the frontend canary surge and one temporary admission Job, is 1675m CPU and 2880Mi memory. Adding the 700m CPU and 768Mi system reserve yields 2375m CPU and 3648Mi memory. Future scheduling verification must require at least 1200m CPU and 4Gi memory of additional headroom after those totals; the proposed temporary node shape is expected to meet this but must be verified from live allocatable capacity before controllers are installed.
+The long-running platform-component subtotal is 950m CPU and 1600Mi memory. The 50m CPU and 64Mi admission patch Job is temporary and excluded from steady state. Combining the application subtotal with the long-running platform subtotal gives a steady-state footprint of 1550m CPU and 2816Mi memory. The peak, including the frontend canary surge and one temporary admission Job, is 1675m CPU and 3008Mi memory. Adding the 700m CPU and 768Mi system reserve yields 2375m CPU and 3776Mi memory. Future scheduling verification must require at least 1200m CPU and 4Gi memory of additional headroom after those totals; the proposed temporary node shape is expected to meet this but must be verified from live allocatable capacity before controllers are installed.
 
 ## Observability Policy
 

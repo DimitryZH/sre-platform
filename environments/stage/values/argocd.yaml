@@ -27,15 +27,15 @@ controller:
       memory: 512Mi
 
 repoServer:
-  # The chart applies this block to both repo-server and copyutil containers.
-  # Their combined request stays within the reviewed 100m / 128Mi envelope.
+  # Manifest generation exceeded the previous 128Mi limit. Keep the reviewed
+  # CPU request while reserving a bounded, single-Pod memory envelope.
   resources:
     requests:
-      cpu: 50m
-      memory: 64Mi
+      cpu: 100m
+      memory: 256Mi
     limits:
-      cpu: 125m
-      memory: 128Mi
+      cpu: 250m
+      memory: 384Mi
 
 server:
   ingress:

@@ -25,10 +25,8 @@ controller:
     service:
       enabled: true
     serviceMonitor:
-      enabled: true
-      additionalLabels:
-        release: monitoring
-      scrapeInterval: 30s
+      # Created separately by GitOps after the Prometheus Operator CRDs are healthy.
+      enabled: false
   admissionWebhooks:
     enabled: false
 

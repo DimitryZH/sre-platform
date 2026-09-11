@@ -76,6 +76,10 @@ try {
     throw "The Argo CD Deployment status compatibility customization must render."
   }
 
+  if ($argoRenderText -notmatch '(?ms)resource\.customizations\.health\.argoproj\.io_Application:\s*\|.*?hs\.status = "Progressing".*?return hs') {
+    throw "The Argo CD Application health customization must render."
+  }
+
   $ingressDocuments = (Get-Content -Raw -Path $ingressOutput) -split "(?m)^---\s*$"
   $ingressServiceMonitors = @($ingressDocuments | Where-Object { $_ -match '(?m)^kind: ServiceMonitor$' })
   if ($ingressServiceMonitors.Count -ne 0) {

@@ -14,6 +14,8 @@ Argo CD is pinned to a release that requires a status-only compatibility customi
 
 The constrained monitoring profile disables the Prometheus Operator admission webhook as well as its patch hook. The baseline does not require admission validation, and this prevents an unapproved TLS Secret dependency.
 
+The app-of-apps root uses Application health assessment so each sync wave waits for the child Application's reported health. Without this assessment, child Applications can begin autonomous sync before their parent wave is released.
+
 1. Repeat the sanitized target, budget-boundary, IAM-boundary, workload, and public-exposure preflight. Stop if its outcome differs from Pass A.
 2. Verify the local plan checksum and run the temporary-capacity plan guardrail. Stop unless it contains one in-place default-node-pool update from `e2-medium` to `e2-standard-4`, two runtime API no-ops, and no cluster replacement or wider Terraform change.
 3. Apply the exact approved temporary-capacity plan. Verify the expected node-pool operation, node readiness, and live allocatable capacity before creating controllers or application workloads.

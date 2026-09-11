@@ -56,6 +56,8 @@ Grafana is intentionally disabled in the constrained first slice. Pass B validat
 
 The app-of-apps dependency order is explicit: `monitoring-stage` wave `-2`, `argo-rollouts-stage` wave `-1`, then `ingress-nginx-metrics-stage` and `online-shop-stage` wave `1`. Monitoring must become healthy before either ServiceMonitor-bearing child is reconciled; Argo Rollouts must be healthy before the application creates its Rollout resources.
 
+The direct ingress controller is scoped to `online-shop-stage`. That namespace must exist before the initial ingress-nginx release is installed, while it is still empty of application workloads; otherwise the controller exits before it becomes ready.
+
 ## Cost, Window, And Pass B Handoff
 
 The six-hour maximum applies only to the temporary one-node `e2-standard-4` capacity window. Its incremental planning estimate is about USD 0.10 per hour, approximately USD 0.60, excluding regional pricing changes, persistent storage, and egress. Persistent-storage cost continues until separately approved cleanup. Record an auditable current persistent-storage cost estimate and planned cleanup time immediately before Pass B approval; the USD 0.60 estimate does not include storage.

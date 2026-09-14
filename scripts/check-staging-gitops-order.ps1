@@ -43,19 +43,24 @@ if ($ingressMetricsApplicationText -notmatch 'path:\s*environments/stage/argocd/
 }
 
 $serviceMonitorText = Get-Content -Raw -Path $serviceMonitorFile
-foreach ($requiredPattern in @(
-  '^apiVersion:\s*monitoring\.coreos\.com/v1$',
-  '^kind:\s*ServiceMonitor$',
-  '^  namespace:\s*ingress-nginx$',
-  '^    release:\s*monitoring$',
-  '^      app\.kubernetes\.io/name:\s*ingress-nginx$',
-  '^      app\.kubernetes\.io/instance:\s*ingress-nginx$',
-  '^      app\.kubernetes\.io/component:\s*controller$',
-  '^    - port:\s*metrics$',
-  '^      interval:\s*30s$'
+function Test-ServiceMonitorScalar([string]$Key, [string]$Value) {
+  $pattern = '(?m)^\s*(?:-\s*)?' + [regex]::Escape($Key) + '\s*:\s*' + [regex]::Escape($Value) + '\s*(?:#.*)?\r?$'
+  return $serviceMonitorText -match $pattern
+}
+
+foreach ($requiredScalar in @(
+  @{ Key = "apiVersion"; Value = "monitoring.coreos.com/v1" },
+  @{ Key = "kind"; Value = "ServiceMonitor" },
+  @{ Key = "namespace"; Value = "ingress-nginx" },
+  @{ Key = "release"; Value = "monitoring" },
+  @{ Key = "app.kubernetes.io/name"; Value = "ingress-nginx" },
+  @{ Key = "app.kubernetes.io/instance"; Value = "ingress-nginx" },
+  @{ Key = "app.kubernetes.io/component"; Value = "controller" },
+  @{ Key = "port"; Value = "metrics" },
+  @{ Key = "interval"; Value = "30s" }
 )) {
-  if ($serviceMonitorText -notmatch "(?m)$requiredPattern") {
-    throw "Ingress metrics ServiceMonitor contract is incomplete: $requiredPattern"
+  if (-not (Test-ServiceMonitorScalar $requiredScalar.Key $requiredScalar.Value)) {
+    throw "Ingress metrics ServiceMonitor contract is incomplete: $($requiredScalar.Key)=$($requiredScalar.Value)"
   }
 }
 
@@ -79,6 +84,10 @@ $monitoringValuesFile = Join-Path $repositoryRoot "environments\stage\values\kub
 $monitoringValuesText = Get-Content -Raw -Path $monitoringValuesFile
 if ($monitoringValuesText -notmatch '(?ms)admissionWebhooks:\s*\r?\n\s*#.*\r?\n\s*#.*\r?\n\s*enabled:\s*false\s*\r?\n\s*patch:\s*\r?\n\s*enabled:\s*false') {
   throw "The constrained monitoring profile must disable admission webhooks and patch hooks."
+}
+
+if ($monitoringValuesText -notmatch '(?ms)prometheusOperator:\s*\r?\n\s*tls:\s*\r?\n\s*#.*\r?\n\s*#.*\r?\n\s*enabled:\s*false') {
+  throw "The constrained monitoring profile must disable the operator TLS listener."
 }
 
 Write-Output "Staging GitOps dependency-order guardrails passed."

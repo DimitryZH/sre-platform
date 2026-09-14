@@ -81,4 +81,8 @@ if ($monitoringValuesText -notmatch '(?ms)admissionWebhooks:\s*\r?\n\s*#.*\r?\n\
   throw "The constrained monitoring profile must disable admission webhooks and patch hooks."
 }
 
+if ($monitoringValuesText -notmatch '(?ms)prometheusOperator:\s*\r?\n\s*tls:\s*\r?\n\s*#.*\r?\n\s*#.*\r?\n\s*enabled:\s*false') {
+  throw "The constrained monitoring profile must disable the operator TLS listener."
+}
+
 Write-Output "Staging GitOps dependency-order guardrails passed."

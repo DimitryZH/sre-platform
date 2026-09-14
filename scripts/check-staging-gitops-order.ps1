@@ -82,6 +82,13 @@ foreach ($applicationName in @("monitoring-stage.yaml", "argo-rollouts-stage.yam
 
 $monitoringValuesFile = Join-Path $repositoryRoot "environments\stage\values\kube-prometheus-stack-shared.yaml"
 $monitoringValuesText = Get-Content -Raw -Path $monitoringValuesFile
+$monitoringProfileFile = Join-Path $repositoryRoot "environments\stage\values\kube-prometheus-stack.yaml"
+$monitoringProfileText = Get-Content -Raw -Path $monitoringProfileFile
+
+if ($monitoringProfileText -notmatch '(?ms)^kubeStateMetrics:\s*\r?\n\s*enabled:\s*false\s*$') {
+  throw "The constrained monitoring profile must disable kube-state-metrics through kubeStateMetrics.enabled."
+}
+
 if ($monitoringValuesText -notmatch '(?ms)admissionWebhooks:\s*\r?\n\s*#.*\r?\n\s*#.*\r?\n\s*enabled:\s*false\s*\r?\n\s*patch:\s*\r?\n\s*enabled:\s*false') {
   throw "The constrained monitoring profile must disable admission webhooks and patch hooks."
 }

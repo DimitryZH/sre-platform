@@ -5,7 +5,8 @@ grafana:
 alertmanager:
   enabled: false
 
-kube-state-metrics:
+# The chart enables this component through its camelCase parent key.
+kubeStateMetrics:
   enabled: false
 
 nodeExporter:

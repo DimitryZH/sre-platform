@@ -84,9 +84,16 @@ $monitoringValuesFile = Join-Path $repositoryRoot "environments\stage\values\kub
 $monitoringValuesText = Get-Content -Raw -Path $monitoringValuesFile
 $monitoringProfileFile = Join-Path $repositoryRoot "environments\stage\values\kube-prometheus-stack.yaml"
 $monitoringProfileText = Get-Content -Raw -Path $monitoringProfileFile
+$sloRulesFile = Join-Path $repositoryRoot "charts\platform\templates\prometheus-rules.yaml"
+$sloRulesText = Get-Content -Raw -Path $sloRulesFile
 
 if ($monitoringProfileText -notmatch '(?ms)^kubeStateMetrics:\s*\r?\n\s*enabled:\s*false\s*$') {
   throw "The constrained monitoring profile must disable kube-state-metrics through kubeStateMetrics.enabled."
+}
+
+if ($sloRulesText -notmatch 'exported_namespace="\{\{ \$releaseNs \}\}"' -or
+    $sloRulesText -match '(?<!exported_)namespace="\{\{ \$releaseNs \}\}"') {
+  throw "Stage SLO rules must use the ServiceMonitor relabeled exported_namespace selector."
 }
 
 if ($monitoringValuesText -notmatch '(?ms)admissionWebhooks:\s*\r?\n\s*#.*\r?\n\s*#.*\r?\n\s*enabled:\s*false\s*\r?\n\s*patch:\s*\r?\n\s*enabled:\s*false') {

@@ -18,16 +18,17 @@ the focused repository corrections in this change.
   `metrics-per-undefined-host` argument before it emits request SLI series.
 - After the internal traffic path and metric argument were corrected, the
   controller emitted request series and Prometheus scraped the metrics target.
-- The existing SLO recording rules selected `exported_namespace`, while the
-  controller emits the Kubernetes `namespace` label. This made healthy traffic
-  appear as a zero SLO denominator and would invalidate canary analysis.
+- The controller endpoint exposes a Kubernetes `namespace` label, but the
+  reviewed ServiceMonitor relabels it to `exported_namespace` in Prometheus.
+  Recording rules must select the post-relabel label.
 
 ## Safety Decision
 
-No canary trigger, controlled degradation, alert validation, or abort/recovery
-action was run while the recording rules used the ineffective selector. After
-this correction is merged and reconciled, rerun the healthy denominator check
-before beginning the approved canary and reversible failure sequence.
+An initial canary/failure attempt was stopped and cleaned up after the selector
+was found to be ineffective. Its successful AnalysisRuns are not validation
+evidence because they evaluated empty SLO recording rules. After this
+correction is merged and reconciled, rerun the healthy denominator check before
+beginning the approved canary and reversible failure sequence.
 
 ## Scope Confirmation
 

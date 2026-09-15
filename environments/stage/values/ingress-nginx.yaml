@@ -15,11 +15,16 @@ controller:
     limits:
       cpu: 250m
       memory: 256Mi
+  extraArgs:
+    # Stage Ingresses are hostless; expose their request series for the SLI rules.
+    metrics-per-undefined-host: "true"
   service:
     enabled: true
     type: ClusterIP
     external:
-      enabled: false
+      # "external" is the chart's primary controller Service, not public exposure.
+      # Keep it enabled as ClusterIP for in-cluster staging traffic only.
+      enabled: true
   metrics:
     enabled: true
     service:

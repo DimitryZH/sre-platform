@@ -7,7 +7,8 @@ $valuesText = Get-Content -Raw -Path $valuesFile
 
 foreach ($requiredPattern in @(
   '(?ms)scope:\s*\r?\n\s*enabled:\s*true\s*\r?\n\s*namespace:\s*online-shop-stage',
-  '(?ms)service:\s*\r?\n\s*enabled:\s*true\s*\r?\n\s*type:\s*ClusterIP\s*\r?\n\s*external:\s*\r?\n\s*enabled:\s*false',
+  '(?ms)service:\s*\r?\n\s*enabled:\s*true\s*\r?\n\s*type:\s*ClusterIP\s*\r?\n\s*external:\s*\r?\n(?:\s*#.*\r?\n){0,2}\s*enabled:\s*true',
+  '(?ms)extraArgs:\s*\r?\n\s*#.*\r?\n\s*metrics-per-undefined-host:\s*"true"',
   '(?ms)metrics:\s*\r?\n\s*enabled:\s*true',
   '(?ms)serviceMonitor:\s*\r?\n\s*#.*\r?\n\s*enabled:\s*false'
 )) {

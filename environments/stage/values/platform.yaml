@@ -100,3 +100,9 @@ shippingservice:
 
 rollouts:
   enabled: true
+
+monitoring:
+  alertRouting:
+    environment: staging
+    dashboard: staging-online-shop-slo
+    runbook: docs/runbooks/staging-online-shop-slo.md

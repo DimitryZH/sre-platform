@@ -3,7 +3,63 @@ grafana:
   enabled: false
 
 alertmanager:
-  enabled: false
+  enabled: true
+  # This ServiceAccount is created privately with a Workload Identity binding.
+  # The binding and Secret Manager resource reference never belong in Git.
+  serviceAccount:
+    create: false
+    name: alertmanager-stage
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: discard
+      group_by: [alertname, environment, service]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - receiver: pagerduty-staging
+          matchers:
+            - alertname="OnlineShopSLOFastBurnRatePage"
+            - environment="staging"
+            - severity="page"
+          group_by: [alertname, environment, service]
+          continue: false
+    receivers:
+      - name: discard
+      - name: pagerduty-staging
+        pagerduty_configs:
+          - routing_key_file: /var/run/secrets/pagerduty/routing-key
+            send_resolved: true
+            severity: '{{ .CommonLabels.severity }}'
+            class: slo
+            component: '{{ .CommonLabels.service }}'
+            group: staging
+            details:
+              environment: '{{ .CommonLabels.environment }}'
+              service: '{{ .CommonLabels.service }}'
+              severity: '{{ .CommonLabels.severity }}'
+              dashboard: '{{ .CommonAnnotations.dashboard }}'
+              runbook: '{{ .CommonAnnotations.runbook }}'
+              deployment_revision: '{{ with .CommonAnnotations.deployment_revision }}{{ . }}{{ else }}unavailable{{ end }}'
+  alertmanagerSpec:
+    replicas: 1
+    retention: 6h
+    resources:
+      requests: { cpu: 50m, memory: 96Mi }
+      limits: { cpu: 200m, memory: 256Mi }
+    volumes:
+      - name: pagerduty-routing-key
+        csi:
+          driver: secrets-store-gke.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: alertmanager-stage-pagerduty
+    volumeMounts:
+      - name: pagerduty-routing-key
+        mountPath: /var/run/secrets/pagerduty
+        readOnly: true
 
 # The chart enables this component through its camelCase parent key.
 kubeStateMetrics:

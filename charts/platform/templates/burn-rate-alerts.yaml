@@ -24,11 +24,25 @@ spec:
           labels:
             severity: page
             service: frontend
+            {{- with .Values.monitoring.alertRouting }}
+            {{- with .environment }}
+            environment: {{ . | quote }}
+            {{- end }}
+            {{- end }}
           annotations:
             summary: "online-shop frontend SLO burn is high (page)"
             description: |
               Fast burn (5m) and slow burn (1h) both exceed thresholds.
               burn_rate_5m is above threshold=14 AND burn_rate_1h is above threshold=3.
+            {{- with .Values.monitoring.alertRouting }}
+            {{- with .dashboard }}
+            dashboard: {{ . | quote }}
+            {{- end }}
+            {{- with .runbook }}
+            runbook: {{ . | quote }}
+            {{- end }}
+            deployment_revision: '{{ "{{" }} with $labels.rollout_revision {{ "}}" }}{{ "{{" }} $labels.rollout_revision {{ "}}" }}{{ "{{" }} else {{ "}}" }}unavailable{{ "{{" }} end {{ "}}" }}'
+            {{- end }}
 
         - alert: OnlineShopSLOSlowBurnRateTicket
           expr: (slo:burn_rate_30m > 6) and (slo:burn_rate_6h > 1)

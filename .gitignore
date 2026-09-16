@@ -1,6 +1,7 @@
 # Private working documentation
 /docs/*.local.md
 /docs/internal/
+/.private/
 
 # Local render and operator artifacts
 _rendered_platform*

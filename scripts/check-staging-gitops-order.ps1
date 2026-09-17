@@ -104,4 +104,21 @@ if ($monitoringValuesText -notmatch '(?ms)prometheusOperator:\s*\r?\n\s*tls:\s*\
   throw "The constrained monitoring profile must disable the operator TLS listener."
 }
 
+$platformChartDirectory = Join-Path $repositoryRoot "charts\platform"
+$platformValuesFile = Join-Path $repositoryRoot "environments\stage\values\platform.yaml"
+$renderedPlatform = (& helm template online-shop-stage $platformChartDirectory --namespace online-shop-stage -f $platformValuesFile) -join [Environment]::NewLine
+if ($LASTEXITCODE -ne 0) {
+  throw "Unable to render the staging platform chart for workload-port validation."
+}
+
+foreach ($workload in @($renderedPlatform -split "(?m)^---\s*\r?$" | Where-Object {
+  $_ -match '(?m)^kind: (Deployment|Rollout)\r?$'
+})) {
+  $containerPortCount = [regex]::Matches($workload, '(?m)^\s*containerPort:\s*\d+\s*$').Count
+  $tcpProtocolCount = [regex]::Matches($workload, '(?m)^\s*protocol:\s*TCP\s*$').Count
+  if ($containerPortCount -ne $tcpProtocolCount) {
+    throw "Every rendered staging Deployment and Rollout container port must declare protocol: TCP."
+  }
+}
+
 Write-Output "Staging GitOps dependency-order guardrails passed."

@@ -25,6 +25,7 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+              protocol: TCP
           readinessProbe:
             httpGet:
               path: /

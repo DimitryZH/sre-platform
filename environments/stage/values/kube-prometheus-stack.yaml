@@ -32,7 +32,9 @@ alertmanager:
         pagerduty_configs:
           - routing_key_file: /var/run/secrets/pagerduty/routing-key
             send_resolved: true
-            severity: '{{ .CommonLabels.severity }}'
+            # PagerDuty Events API accepts only critical, warning, error, or info.
+            # Keep the internal severity=page matcher above for SLO routing.
+            severity: critical
             class: slo
             component: '{{ .CommonLabels.service }}'
             group: staging

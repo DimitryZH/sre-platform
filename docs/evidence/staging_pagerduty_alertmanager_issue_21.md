@@ -12,6 +12,17 @@ The receiver supplies environment, service, severity, dashboard, runbook, and
 deployment-revision context. The deployment revision is reported as
 `unavailable` when the aggregate SLO alert does not carry that label.
 
+The internal `severity: page` label remains the narrow SLO-routing selector.
+The PagerDuty event payload maps that page to the API-valid `critical` severity;
+this preserves internal routing while preventing rejected delivery requests.
+
+## Validation Finding
+
+A controlled staging validation reached the PagerDuty Events API, but the API
+rejected the event with HTTP 400 because `page` is not a valid payload severity.
+No incident was created. This finding is limited to the receiver payload; it
+does not indicate a credential, routing, or transport failure.
+
 ## Secret Delivery Boundary
 
 The routing key is not present in the repository, Helm values, rendered

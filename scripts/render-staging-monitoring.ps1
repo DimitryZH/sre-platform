@@ -82,6 +82,8 @@ try {
   foreach ($requiredConfigPattern in @(
     '(?m)^\s*routing_key_file:\s*/var/run/secrets/pagerduty/routing-key\s*$',
     '(?m)^\s*send_resolved:\s*true\s*$',
+    '(?m)^\s*severity:\s*critical\s*$',
+    '(?ms)send_resolved:\s*true\s*\r?\n\s*(?:#.*\r?\n\s*){0,2}severity:\s*critical',
     'alertname="OnlineShopSLOFastBurnRatePage"',
     'environment="staging"',
     'severity="page"'

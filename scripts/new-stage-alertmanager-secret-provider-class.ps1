@@ -33,8 +33,8 @@ spec:
   provider: gke
   parameters:
     secrets: |
-      - resourceName: \"$SecretResourceName\"
-        path: \"routing-key\"
+      - resourceName: "$SecretResourceName"
+        path: "routing-key"
 "@
 
 [System.IO.File]::WriteAllText($resolvedOutputPath, $manifest, (New-Object System.Text.UTF8Encoding($false)))

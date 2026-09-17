@@ -12,6 +12,8 @@ foreach ($requiredPattern in @(
   '(?ms)serviceAccount:\s*\r?\n\s*create:\s*false\s*\r?\n\s*name:\s*alertmanager-stage',
   '(?m)^\s*(?:-\s*)?routing_key_file:\s*/var/run/secrets/pagerduty/routing-key',
   '(?m)^\s*send_resolved:\s*true',
+  '(?m)^\s*severity:\s*critical',
+  '(?ms)send_resolved:\s*true\s*\r?\n\s*(?:#.*\r?\n\s*){0,2}severity:\s*critical',
   '(?m)^\s*driver:\s*secrets-store-gke\.csi\.k8s\.io',
   '(?m)^\s*secretProviderClass:\s*alertmanager-stage-pagerduty',
   'alertname="OnlineShopSLOFastBurnRatePage"',

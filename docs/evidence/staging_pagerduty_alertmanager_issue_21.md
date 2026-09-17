@@ -61,8 +61,14 @@ application-level failure path. The operator acknowledged the resulting
 PagerDuty incident. After the failure source was removed, the SLO alert cleared
 and Alertmanager delivered the resolved event without a delivery error.
 
-The final validation found a separate GitOps structured-diff prerequisite:
-container ports must declare `protocol: TCP` before the staging application can
-use Server-Side Apply. This is a reconciliation correctness fix; it does not
-change workload ports, resource requests, chart versions, exposure, storage,
-or alert-routing scope.
+The final validation found a GitOps structured-diff prerequisite in the desired
+frontend Rollout: its container port must declare `protocol: TCP` before the
+staging application can use Server-Side Apply. The Kubernetes API defaulted
+the live field to TCP, so the omitted desired field prevented Argo CD from
+constructing a structured diff. This is a reconciliation correctness fix; it
+does not change workload ports, resource requests, chart versions, exposure,
+storage, or alert-routing scope.
+
+The five remaining terminal AnalysisRuns are owned by the frontend Rollout and
+have no configured TTL. They are controller-retained history, not orphaned
+temporary resources, and are not involved in the structured-diff error.

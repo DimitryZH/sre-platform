@@ -53,3 +53,16 @@ committed or logged.
 
 No PagerDuty service, schedule, escalation policy, alert route beyond the one
 listed above, or remediation behavior is changed by this repository work.
+
+## Staging Lifecycle Validation
+
+The constrained staging alert was triggered by the reviewed reversible
+application-level failure path. The operator acknowledged the resulting
+PagerDuty incident. After the failure source was removed, the SLO alert cleared
+and Alertmanager delivered the resolved event without a delivery error.
+
+The final validation found a separate GitOps structured-diff prerequisite:
+container ports must declare `protocol: TCP` before the staging application can
+use Server-Side Apply. This is a reconciliation correctness fix; it does not
+change workload ports, resource requests, chart versions, exposure, storage,
+or alert-routing scope.

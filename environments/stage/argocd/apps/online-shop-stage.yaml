@@ -25,6 +25,7 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - RespectIgnoreDifferences=true
+      - ServerSideApply=true
   sources:
     - repoURL: https://github.com/DimitryZH/sre-platform
       targetRevision: main

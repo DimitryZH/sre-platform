@@ -2,7 +2,7 @@
 
 **Status:** Active
 
-**Last reviewed:** 2026-09-09
+**Last reviewed:** 2026-09-17
 
 ## Purpose
 
@@ -56,7 +56,7 @@ These systems are complementary:
 
 ## Milestone 1 — Current GKE Staging Reconstruction
 
-**Priority:** Current
+**Status:** Completed in staging — September 2026
 
 ### Goal
 
@@ -107,9 +107,17 @@ results as current runtime state.
 - Evidence is recorded as current staging validation in
   [`validation-history.md`](validation-history.md).
 
+### September 2026 Outcome
+
+The reviewed staging baseline, GitOps reconciliation, internal traffic path,
+SLO evaluation, canary abort, and clean recovery were validated. Prometheus,
+Alertmanager, ServiceMonitors, PrometheusRules, and the reviewed dashboard
+configuration were included. Grafana UI was deliberately disabled and is not a
+completed validation claim.
+
 ## Milestone 2 — PagerDuty Incident Response
 
-**Priority:** Next after the live staging alert path
+**Status:** Completed in staging — September 2026
 
 ### Goal
 
@@ -146,6 +154,12 @@ SRE Platform alerts.
   searching for the affected environment or service.
 - PagerDuty does not perform Kubernetes remediation.
 - PagerDuty remains functional when the AI Operations Platform is unavailable.
+
+### September 2026 Outcome
+
+One constrained staging SLO alert completed the human incident lifecycle:
+`Triggered -> Acknowledged -> Resolved`. The delivery path remains independent
+of AI investigation and does not perform Kubernetes remediation.
 
 ## Milestone 3 — Bounded Read-Only Evidence Interface
 
@@ -408,15 +422,15 @@ the preceding safety or evidence boundary.
 
 ## Milestone Summary
 
-| Milestone | Intended outcome |
-| --- | --- |
-| Current GKE Staging Reconstruction | GitOps, application, observability, SLO alerting, failure, and recovery are revalidated in the current environment |
-| PagerDuty Incident Response | One actionable SLO alert completes the human incident lifecycle |
-| Bounded Read-Only Evidence Interface | Approved SRE evidence is accessible without broad cluster or observability permissions |
-| First Governed AI Investigation | AI Operations Platform and HolmesGPT complete one bounded read-only investigation |
-| Unified Incident Demonstration | Paging, investigation, native recovery, evidence, and human review work together without ownership overlap |
-| HolmesGPT Operator Mode Experiment | Proactive scheduled checks are evaluated in shadow mode and promoted only if objective gates pass |
-| Production Expansion | Production work begins only after staging evidence and a separate approval boundary |
+| Milestone | Status | Intended outcome |
+| --- | --- | --- |
+| Current GKE Staging Reconstruction | Completed in staging — September 2026 | GitOps, application, observability, SLO alerting, failure, and recovery are revalidated in the current environment |
+| PagerDuty Incident Response | Completed in staging — September 2026 | One actionable SLO alert completes the human incident lifecycle |
+| Bounded Read-Only Evidence Interface | Pending | Approved SRE evidence is accessible without broad cluster or observability permissions |
+| First Governed AI Investigation | Pending | AI Operations Platform and HolmesGPT complete one bounded read-only investigation |
+| Unified Incident Demonstration | Pending | Paging, investigation, native recovery, evidence, and human review work together without ownership overlap |
+| HolmesGPT Operator Mode Experiment | Pending experiment | Proactive scheduled checks are evaluated in shadow mode and promoted only if objective gates pass |
+| Production Expansion | Pending | Production work begins only after staging evidence and a separate approval boundary |
 
 ## Definition of Done for the First Integrated MVP
 

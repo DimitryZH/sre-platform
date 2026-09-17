@@ -4,7 +4,7 @@
 
 This repository implements a GitOps-based SRE platform that governs application releases using **Service Level Objectives (SLOs)** and error budgets instead of raw infrastructure metrics.
 
-The platform is designed as a production-grade observability and release-governance example, demonstrating how modern SRE teams can safely deliver microservices using automated, explainable decisions.
+The platform is a production-oriented observability and release-governance example. Its completed live validation is limited to the documented staging scope; it is not a production-readiness claim.
 
 End-to-end lifecycle:
 
@@ -28,11 +28,11 @@ Release decisions are based on:
 
 This produces delivery behavior that is aligned with user experience, not just infrastructure noise.
 
-## Live SLO Validation (Quick View)
+## April-May 2026 Dev Validation (Quick View)
 
 ![SLO Spike](docs/observability/screenshots/02_short_spike_2026-04-17_1153-1154.png)
 
-This platform demonstrates **SLO-driven observability using real traffic and controlled error injection**.
+This historical dev validation demonstrates **SLO-driven observability using real traffic and controlled error injection**.
 
 ### What is validated
 
@@ -70,6 +70,23 @@ Artifacts:
 - Case Study: [`docs/case-study/slo_rollout_demo.md`](docs/case-study/slo_rollout_demo.md)
 - Evidence: [`docs/evidence/slo_gated_rollout_evidence_dev.md`](docs/evidence/slo_gated_rollout_evidence_dev.md)
 - CLI Evidence: [`docs/evidence/slo_gated_rollout_cli_excerpts_dev.md`](docs/evidence/slo_gated_rollout_cli_excerpts_dev.md)
+
+## September 2026 Staging SRE Validation (Quick View)
+
+The completed staging milestone validated the GitOps baseline, SLO signal path,
+canary abort and recovery behavior, and one narrow human PagerDuty incident
+lifecycle. The final verified baseline had five Argo CD Applications
+`Synced/Healthy`, no temporary test resources or AnalysisRuns, one expected
+Prometheus PVC, and no LoadBalancer or public exposure.
+
+| Triggered | Acknowledged | Resolved |
+| --- | --- | --- |
+| <a href="docs/assets/staging-incident-response/pagerduty-staging-01-triggered.png"><img src="docs/assets/staging-incident-response/pagerduty-staging-01-triggered.png" alt="Staging PagerDuty incident triggered" width="100%"></a> | <a href="docs/assets/staging-incident-response/pagerduty-staging-02-acknowledged.png"><img src="docs/assets/staging-incident-response/pagerduty-staging-02-acknowledged.png" alt="Staging PagerDuty incident acknowledged" width="100%"></a> | <a href="docs/assets/staging-incident-response/pagerduty-staging-03-resolved.png"><img src="docs/assets/staging-incident-response/pagerduty-staging-03-resolved.png" alt="Staging PagerDuty incident resolved" width="100%"></a> |
+
+The sequence is staging-only evidence of a bounded alert path, not production
+validation. It does not validate AI investigation, Scheduler operation, or
+automated remediation. See the [September 2026 consolidated staging
+evidence](docs/evidence/staging_delivery_incident_response_validation_september_2026.md).
 
 
 ## Load and Failure Testing with k6

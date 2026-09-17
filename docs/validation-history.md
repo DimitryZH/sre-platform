@@ -2,7 +2,7 @@
 
 **Document type:** Public validation record
 
-**Last reviewed:** 2026-09-09
+**Last reviewed:** 2026-09-17
 
 ## Purpose
 
@@ -34,6 +34,7 @@ This document uses the following terms consistently:
 | `Revalidation required` | Historical evidence exists, but the capability has not yet been exercised in the current reconstructed environment. |
 | `Partially validated` | Some required behavior was demonstrated, but at least one explicit completion condition remains open. |
 | `Not yet validated` | No accepted live evidence currently proves the capability. |
+| `Validated in staging` | Accepted evidence proved the capability in staging during the stated validation period; it does not assert that the runtime remains deployed or production-ready. |
 
 These states are intentionally different. In particular:
 
@@ -277,15 +278,16 @@ does not prove that the following were completed in that environment:
 ### Reconstruction Context
 
 The project returned to active deployment work in September using a new Google
-Cloud project. This is a reconstruction and revalidation period, not the first
-time the platform capabilities were implemented.
+Cloud project. The controlled reconstruction and its documented staging
+validation were completed in September 2026; this is not the first time the
+platform capabilities were implemented.
 
-The current target is:
+The September 2026 reconstruction target was:
 
 - Google Cloud project: approved staging target;
 - cluster: `online-shop-staging`;
 - location model: Standard zonal GKE;
-- current node baseline: one fixed `e2-medium` node.
+- initial runtime-plan baseline: one fixed `e2-medium` node.
 
 ### Current Foundation
 
@@ -305,18 +307,18 @@ References:
 - [Foundation PR #2](https://github.com/DimitryZH/sre-platform/pull/2)
 - [Runtime plan PR #4](https://github.com/DimitryZH/sre-platform/pull/4)
 
-### Current Minimal GKE Runtime
+### Initial Approved GKE Runtime Baseline
 
-**Current status:** `Currently deployed`
+**September 2026 status:** Initial approved runtime-plan baseline
 
-The exact approved Terraform plan created only:
+The exact approved Terraform plan initially created only:
 
 - Compute Engine API enablement;
 - GKE API enablement;
 - the zonal Standard GKE cluster `online-shop-staging`;
 - one fixed `e2-medium` node.
 
-Post-apply verification confirmed:
+Historical post-apply verification confirmed:
 
 - the cluster was running in the approved zone;
 - the runtime state contained only the three approved Terraform addresses;
@@ -329,52 +331,42 @@ Reference:
 
 - [Applied staging runtime PR #6](https://github.com/DimitryZH/sre-platform/pull/6)
 
-### Current Revalidation Boundary
+### Staging Delivery And Incident Response Validation
 
-**Current status:** `Revalidation required`
+**September 2026 status:** `Validated in staging`
 
-The repository still contains the implementation and historical evidence for
-GitOps, Online Boutique, observability, SLO evaluation, progressive delivery,
-failure injection, and recovery. Those capabilities are not yet live in the
-new staging cluster.
+The completed staging milestone revalidated the GitOps baseline, application
+and ingress path, Prometheus and Alertmanager signals, SLO recording rules,
+fast-burn alert, canary abort, clean recovery, and one narrow PagerDuty incident
+lifecycle. Final reconciliation recorded five Argo CD Applications as
+`Synced/Healthy`, no temporary test resources or AnalysisRuns, one expected
+Prometheus PVC, and no LoadBalancer or public exposure.
 
-The current environment must separately demonstrate:
-
-- capacity fit and explicit resource requests and limits;
-- Argo CD and Argo Rollouts installation;
-- Online Boutique staging convergence;
-- ingress and controlled traffic;
-- Prometheus, Alertmanager, Grafana, ServiceMonitor, and PrometheusRule
-  operation;
-- SLO and burn-rate behavior;
-- controlled failure, rollout decision, and recovery;
-- PagerDuty delivery and incident lifecycle;
-- a bounded read-only evidence interface;
-- AI Operations Platform and HolmesGPT integration.
-
-Revalidation should reuse the repository's proven design and lessons without
-claiming that a source manifest is equivalent to a currently running service.
+This is time-bounded staging evidence. It does not establish production
+readiness or ongoing runtime state, and it does not validate Grafana UI, a
+bounded read-only evidence interface, AI Operations Platform integration,
+HolmesGPT, Scheduler operation, or automated remediation.
 
 ## Capability History Matrix
 
-| Capability | April-May 2026 | September 2026 current state | Primary evidence |
+| Capability | April-May 2026 | September 2026 status | Primary evidence |
 | --- | --- | --- | --- |
 | Fresh-project cloud bootstrap | `Historically validated` | `Currently deployed` with a newly bounded foundation | Deployment guide; PRs #2 and #4 |
-| GKE cluster | `Historically validated` | `Currently deployed`: one zonal `e2-medium` node | Deployment guide; PR #6 |
-| Argo CD bootstrap | `Historically validated` | `Revalidation required` | Deployment guide |
-| Argo Rollouts controller | `Historically validated` | `Revalidation required` | Rollout case study and evidence |
+| GKE cluster | `Historically validated` | Initial September 2026 runtime-plan baseline: one zonal `e2-medium` node; later node shape is not asserted here | Deployment guide; PR #6 |
+| Argo CD bootstrap | `Historically validated` | `Validated in staging` | Staging baseline evidence |
+| Argo Rollouts controller | `Historically validated` | `Validated in staging` | Staging baseline and SLO recovery evidence |
 | `online-shop-dev` runtime | `Historically validated` | Previous dev environment is not the current runtime | Deployment guide and screenshots |
-| Current `online-shop-stage` runtime | `Not yet validated` | `Not yet validated` | Stage manifests exist; no current live evidence |
-| Ingress traffic path | `Historically validated` in dev | `Revalidation required` | Deployment guide and SLO validation |
-| Prometheus target discovery | `Historically validated` in dev | `Revalidation required` | SLO validation and verification summary |
-| SLO error ratio and burn rate | `Historically validated` in dev | `Revalidation required` | SLO validation and rollout evidence |
-| Fast-burn alert lifecycle | `Historically validated` in dev | `Revalidation required` | SLO validation and verification summary |
+| Current `online-shop-stage` runtime | `Not yet validated` | `Validated in staging` | September 2026 consolidated evidence |
+| Ingress traffic path | `Historically validated` in dev | `Validated in staging` | Staging SLO recovery evidence |
+| Prometheus target discovery | `Historically validated` in dev | `Validated in staging` | Staging SLO recovery evidence |
+| SLO error ratio and burn rate | `Historically validated` in dev | `Validated in staging` | Staging SLO recovery evidence |
+| Fast-burn alert lifecycle | `Historically validated` in dev | `Validated in staging` | Staging SLO recovery and PagerDuty evidence |
 | Clean-slate slow-burn lifecycle | `Partially validated` | `Not yet validated` | SLO verification summary |
-| Healthy canary 10% -> 50% -> 100% | `Historically validated` | `Revalidation required` | Rollout case study and CLI excerpts |
-| Abort at 10% SLO gate | `Historically validated` | `Revalidation required` | Rollout evidence and CLI excerpts |
-| Abort at 50% SLO gate | `Historically validated` | `Revalidation required` | Rollout evidence and CLI excerpts |
-| Post-abort recovery | `Historically validated` | `Revalidation required` | Rollout evidence and load-run recovery summaries |
-| PagerDuty incident response | `Not yet validated` | `Not yet validated` | Future milestone |
+| Healthy canary 10% -> 50% -> 100% | `Historically validated` | `Validated in staging` | Staging SLO recovery evidence |
+| Abort at 10% SLO gate | `Historically validated` | `Validated in staging` | Staging SLO recovery evidence |
+| Abort at 50% SLO gate | `Historically validated` | `Revalidation required` | Historical dev evidence only |
+| Post-abort recovery | `Historically validated` | `Validated in staging` | Staging SLO recovery evidence |
+| PagerDuty incident response | `Not yet validated` | `Validated in staging` | Staging PagerDuty evidence |
 | AI Operations investigation | `Not yet validated` | `Not yet validated` | Future milestone |
 | HolmesGPT investigation | `Not yet validated` | `Not yet validated` | Future milestone |
 | HolmesGPT Operator Mode | `Not yet validated` | `Deferred experiment` | Future post-MVP experiment |
@@ -404,6 +396,12 @@ claiming that a source manifest is equivalent to a currently running service.
 - [Foundation PR #2](https://github.com/DimitryZH/sre-platform/pull/2)
 - [Runtime plan PR #4](https://github.com/DimitryZH/sre-platform/pull/4)
 - [Applied runtime PR #6](https://github.com/DimitryZH/sre-platform/pull/6)
+
+### September 2026 staging delivery and incident response
+
+- [Consolidated staging milestone evidence](evidence/staging_delivery_incident_response_validation_september_2026.md)
+- [Staging SLO canary and recovery evidence](evidence/staging_slo_canary_recovery_issue_17.md)
+- [Staging PagerDuty evidence](evidence/staging_pagerduty_alertmanager_issue_21.md)
 
 ## Documentation Reconciliation Notes
 

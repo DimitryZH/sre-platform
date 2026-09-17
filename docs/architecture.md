@@ -2,6 +2,10 @@
 
 This document explains the architecture of the **SLO-Driven Progressive Delivery Platform**, focusing on runtime data flow, GitOps, progressive delivery, SLO-based automation, and governance.
 
+The broad diagrams describe the intended platform architecture. The September
+2026 staging notification section identifies the narrower boundary that was
+live-validated.
+
 ---
 
 ## 1. High-Level Architecture Diagram
@@ -34,6 +38,9 @@ Payment -->|HTTP Metrics| Prometheus
 
 Prometheus -->|Recording Rules| BurnRate[slo:burn_rate_5m / 1h]
 BurnRate --> Grafana[Grafana Dashboard]
+Prometheus --> Alertmanager
+Alertmanager --> PagerDuty[PagerDuty]
+PagerDuty --> Human[Human acknowledgement]
 
 %% =========================
 %% CANARY CONTROL
@@ -73,7 +80,7 @@ classDef control fill:#fff3e0,stroke:#ef6c00,color:#e65100
 classDef governance fill:#fce4ec,stroke:#ad1457,color:#880e4f
 
 class Prometheus,Grafana,BurnRate data
-class ArgoRollouts,AnalysisTemplate,ArgoCD control
+class ArgoRollouts,AnalysisTemplate,ArgoCD,Alertmanager,PagerDuty,Human control
 class OPA,GitHubActions governance
 ```
 
@@ -102,7 +109,21 @@ The diagram highlights four main planes of the platform:
    - Metrics are evaluated by OPA (Open Policy Agent)
    - OPA returns **allow/deny** decisions that can block or approve merges
 
-### 1.3 Key Architectural Concepts
+### 1.3 Validated Staging Notification Boundary
+
+The September 2026 staging validation exercised one narrow notification path:
+
+```text
+Prometheus -> Alertmanager -> PagerDuty -> human acknowledgement
+```
+
+Alertmanager routes only the reviewed staging fast-burn SLO condition through a
+secret-backed, least-privilege delivery path and sends a resolved event after
+monitored health recovers. This boundary contains no AI investigation and no
+automated remediation. Grafana dashboard configuration is reviewed in the
+staging slice, but Grafana UI itself was not enabled or live-validated.
+
+### 1.4 Key Architectural Concepts
 
 - **Separation of concerns** between runtime, delivery, GitOps, and governance
 - **Control loops** for both runtime (Rollouts + Prometheus) and governance (GitHub + OPA)

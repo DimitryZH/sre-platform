@@ -35,24 +35,13 @@ SecretProviderClass only into the ignored `.private` directory from a private
 operator input. The resulting manifest is not a GitOps object and must not be
 committed or logged.
 
-## Required Live Steps
+## Completed Staging Integration
 
-1. Enable the GKE Secret Manager CSI capability through a separately approved
-   cloud change.
-2. Create a dedicated Google service account and bind only the staging
-   Alertmanager Kubernetes service account through Workload Identity.
-3. Grant that identity Secret Manager access only to the pre-existing routing
-   credential, then create the Kubernetes service account privately.
-4. Render and apply the ignored SecretProviderClass manifest privately, without
-   displaying its input or content.
-5. Reconcile `monitoring-stage` and verify the CSI mount is readable by
-   Alertmanager without inspecting the key.
-6. Re-run the approved staging SLO failure-and-recovery scenario and verify one
-   PagerDuty incident transitions through triggered, acknowledged, and
-   resolved states.
-
-No PagerDuty service, schedule, escalation policy, alert route beyond the one
-listed above, or remediation behavior is changed by this repository work.
+The approved staging delivery path was completed with a dedicated
+least-privilege workload identity and a read-only secret-backed mount for
+Alertmanager. The route remains limited to the reviewed fast-burn SLO alert;
+no PagerDuty service, schedule, escalation policy, unrelated alert route, or
+remediation behavior was changed.
 
 ## Staging Lifecycle Validation
 
@@ -60,6 +49,9 @@ The constrained staging alert was triggered by the reviewed reversible
 application-level failure path. The operator acknowledged the resulting
 PagerDuty incident. After the failure source was removed, the SLO alert cleared
 and Alertmanager delivered the resolved event without a delivery error.
+
+The validated lifecycle is `Triggered -> Acknowledged -> Resolved`. It is
+staging-only evidence and does not establish production readiness.
 
 The final validation found a GitOps structured-diff prerequisite in the desired
 frontend Rollout: its container port must declare `protocol: TCP` before the
@@ -69,6 +61,8 @@ constructing a structured diff. This is a reconciliation correctness fix; it
 does not change workload ports, resource requests, chart versions, exposure,
 storage, or alert-routing scope.
 
-The five remaining terminal AnalysisRuns are owned by the frontend Rollout and
-have no configured TTL. They are controller-retained history, not orphaned
-temporary resources, and are not involved in the structured-diff error.
+The five terminal AnalysisRuns observed during the reconciliation diagnosis were
+controller-retained history, not orphaned temporary resources, and were not
+involved in the structured-diff error. The final approved cleanup removed that
+retained history after verifying its ownership and terminal status. See the
+[consolidated September 2026 staging evidence](staging_delivery_incident_response_validation_september_2026.md).

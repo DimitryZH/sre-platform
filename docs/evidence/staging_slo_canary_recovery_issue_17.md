@@ -53,3 +53,6 @@ the earlier invalid attempt that evaluated empty recording rules.
 - No Terraform, capacity, IAM, budget, networking, chart-version, public
   exposure, PagerDuty, AI Operations, HolmesGPT, Scheduler, or remediation
   action was performed.
+
+Later reconciliation and retained-history cleanup are recorded separately in
+the [consolidated September 2026 staging evidence](staging_delivery_incident_response_validation_september_2026.md). This Issue #17 record preserves the state observed during its own validation session.

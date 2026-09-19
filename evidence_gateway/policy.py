@@ -51,6 +51,13 @@ MAX_LOG_LINE_LENGTH = 240
 MAX_LOG_BYTES = 8 * 1024
 MAX_GITOPS_FILE_BYTES = 4 * 1024
 MAX_EVENT_MESSAGE_LENGTH = 240
+MAX_CONDITIONS = 8
+MAX_ANALYSIS_RUNS = 8
+MAX_EVENTS = 16
+MAX_PROMETHEUS_VALUES = 16
+MAX_REPLAY_ENTRIES = 128
+MAX_RATE_LIMIT_ENTRIES = 128
+MAX_REQUESTS_PER_MINUTE = 60
 
 SAFE_SUBJECT_RE = re.compile(r"^[a-z0-9][a-z0-9_.:@/-]{2,127}$")
 SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,160}$")
@@ -85,6 +92,13 @@ class EvidenceLimits:
     max_log_bytes: int = MAX_LOG_BYTES
     max_gitops_file_bytes: int = MAX_GITOPS_FILE_BYTES
     max_event_message_length: int = MAX_EVENT_MESSAGE_LENGTH
+    max_conditions: int = MAX_CONDITIONS
+    max_analysis_runs: int = MAX_ANALYSIS_RUNS
+    max_events: int = MAX_EVENTS
+    max_prometheus_values: int = MAX_PROMETHEUS_VALUES
+    max_replay_entries: int = MAX_REPLAY_ENTRIES
+    max_rate_limit_entries: int = MAX_RATE_LIMIT_ENTRIES
+    max_requests_per_minute: int = MAX_REQUESTS_PER_MINUTE
 
 
 @dataclass(frozen=True)
@@ -125,28 +139,58 @@ class TargetPolicy:
 
 @dataclass
 class ReplayGuard:
-    seen_nonces: set[str] = field(default_factory=set)
+    seen_nonces: dict[str, datetime] = field(default_factory=dict)
 
-    def accept_once(self, nonce: str) -> None:
+    def accept_once(self, nonce: str, *, expires_at: datetime, now: datetime, capacity: int) -> None:
+        self._purge(now)
         if nonce in self.seen_nonces:
             raise EvidenceError("replay_rejected", "request nonce was already used")
-        self.seen_nonces.add(nonce)
+        if len(self.seen_nonces) >= capacity:
+            raise EvidenceError("replay_capacity_exceeded", "replay protection state is at capacity")
+        self.seen_nonces[nonce] = expires_at
+
+    def _purge(self, now: datetime) -> None:
+        for nonce, expires_at in list(self.seen_nonces.items()):
+            if expires_at <= now:
+                del self.seen_nonces[nonce]
+
+
+@dataclass
+class RateLimitGuard:
+    attempts_by_subject: dict[str, list[datetime]] = field(default_factory=dict)
+
+    def accept(self, subject: str, *, now: datetime, capacity: int, max_per_minute: int) -> None:
+        cutoff = now - timedelta(minutes=1)
+        active_subjects = {
+            item_subject: [timestamp for timestamp in timestamps if timestamp > cutoff]
+            for item_subject, timestamps in self.attempts_by_subject.items()
+        }
+        self.attempts_by_subject = {
+            item_subject: timestamps for item_subject, timestamps in active_subjects.items() if timestamps
+        }
+        if subject not in self.attempts_by_subject and len(self.attempts_by_subject) >= capacity:
+            raise EvidenceError("rate_limit_unavailable", "rate limit state is at capacity")
+        timestamps = self.attempts_by_subject.setdefault(subject, [])
+        if len(timestamps) >= max_per_minute:
+            raise EvidenceError("rate_limited", "caller exceeded the offline request rate policy")
+        timestamps.append(now)
 
 
 @dataclass
 class EvidencePolicy:
-    allowed_subjects: frozenset[str] = frozenset({"ai-operations-staging"})
+    allowed_subjects: frozenset[str] = frozenset({"staging-evidence-client"})
     required_audience: str = "sre-platform-evidence-gateway"
     required_scope: str = "evidence.read.staging.frontend"
     target: TargetPolicy = field(default_factory=TargetPolicy)
     limits: EvidenceLimits = field(default_factory=EvidenceLimits)
     replay_guard: ReplayGuard = field(default_factory=ReplayGuard)
+    rate_limit_guard: RateLimitGuard = field(default_factory=RateLimitGuard)
 
     def validate_request(self, request: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
         current_time = now or datetime.now(UTC)
         if not isinstance(request, dict):
             raise EvidenceError("malformed_request", "request must be a JSON object")
-        allowed_fields = {"schema_version", "operation", "auth", "time_range", "evidence_kinds"}
+        allowed_fields = {"schema_version", "operation", "request_id", "auth", "time_range", "evidence_kinds"}
         unknown = sorted(set(request) - allowed_fields)
         if unknown:
             if any(_looks_like_mutation(value) for value in unknown):
@@ -159,14 +203,28 @@ class EvidencePolicy:
             raise EvidenceError("unknown_operation", "operation is not approved")
 
         self.target.validate()
-        nonce = self._validate_auth(request.get("auth"), now=current_time)
-        start, end = self._validate_time_range(request.get("time_range"))
+        request_id = self._validate_request_id(request.get("request_id"))
+        auth = self._validate_auth(request.get("auth"), now=current_time)
+        start, end = self._validate_time_range(request.get("time_range"), now=current_time)
         kinds = self._validate_evidence_kinds(request.get("evidence_kinds"))
-        self.replay_guard.accept_once(nonce)
+        self.rate_limit_guard.accept(
+            auth["subject"],
+            now=current_time,
+            capacity=self.limits.max_rate_limit_entries,
+            max_per_minute=self.limits.max_requests_per_minute,
+        )
+        self.replay_guard.accept_once(
+            auth["nonce"],
+            expires_at=auth["expires_at"],
+            now=current_time,
+            capacity=self.limits.max_replay_entries,
+        )
 
         return {
             "schema_version": SCHEMA_VERSION,
             "operation": OPERATION_COLLECT,
+            "request_id": request_id,
+            "caller_identity": auth["subject"],
             "target": self.target.to_public_dict(),
             "time_range": {"start": _format_time(start), "end": _format_time(end)},
             "evidence_kinds": kinds,
@@ -175,7 +233,12 @@ class EvidencePolicy:
             "gitops_path_ids": sorted(GITOPS_PATH_IDS),
         }
 
-    def _validate_auth(self, auth: Any, *, now: datetime) -> str:
+    def _validate_request_id(self, value: Any) -> str:
+        if not isinstance(value, str) or not SAFE_ID_RE.fullmatch(value):
+            raise EvidenceError("malformed_request", "request_id is required and must be safe")
+        return value
+
+    def _validate_auth(self, auth: Any, *, now: datetime) -> dict[str, Any]:
         if not isinstance(auth, dict):
             raise EvidenceError("unauthorized", "auth envelope is required")
         allowed = {"subject", "audience", "scope", "issued_at", "expires_at", "nonce"}
@@ -195,15 +258,17 @@ class EvidencePolicy:
             raise EvidenceError("stale_request", "auth time bounds are not currently valid")
         if expires_at - issued_at > MAX_AUTH_LIFETIME:
             raise EvidenceError("stale_request", "auth lifetime exceeds the allowed replay window")
-        return nonce
+        return {"subject": subject, "nonce": nonce, "expires_at": expires_at}
 
-    def _validate_time_range(self, value: Any) -> tuple[datetime, datetime]:
+    def _validate_time_range(self, value: Any, *, now: datetime) -> tuple[datetime, datetime]:
         if not isinstance(value, dict) or set(value) != {"start", "end"}:
             raise EvidenceError("invalid_time_range", "time_range must contain only start and end")
         start = _parse_time(value.get("start"), "time_range.start")
         end = _parse_time(value.get("end"), "time_range.end")
         if end <= start:
             raise EvidenceError("invalid_time_range", "time_range end must be after start")
+        if start > now or end > now:
+            raise EvidenceError("invalid_time_range", "time_range must not be in the future")
         if end - start > MAX_TIME_RANGE:
             raise EvidenceError("invalid_time_range", "time_range exceeds 60 minutes")
         return start, end
@@ -270,9 +335,9 @@ def contains_unsafe_text(value: str) -> bool:
 
 
 def sanitize_string(value: Any, *, max_length: int) -> str:
-    if value is None:
-        return ""
-    text = str(value)
+    if not isinstance(value, str):
+        raise EvidenceError("malformed_provider_data", "string provider value is malformed")
+    text = value
     if contains_unsafe_text(text):
         return "[REDACTED-UNSAFE]"
     text = text.replace("\r", " ").replace("\n", " ")

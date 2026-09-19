@@ -13,7 +13,8 @@ from evidence_gateway import (
     FakePrometheusProvider,
 )
 from evidence_gateway.policy import SCHEMA_VERSION, TargetPolicy
-from evidence_gateway.providers import EvidenceProviders
+from evidence_gateway.policy import EvidenceLimits, ReplayGuard
+from evidence_gateway.providers import EvidenceProviders, ProviderError
 
 
 NOW = datetime(2026, 9, 19, 16, 0, tzinfo=UTC)
@@ -28,8 +29,9 @@ def base_request(nonce: str = "nonce-001") -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "operation": "collect_staging_frontend_evidence",
+        "request_id": f"req-{nonce}",
         "auth": {
-            "subject": "ai-operations-staging",
+            "subject": "staging-evidence-client",
             "audience": "sre-platform-evidence-gateway",
             "scope": "evidence.read.staging.frontend",
             "issued_at": iso(-1),
@@ -67,7 +69,14 @@ def fake_providers() -> EvidenceProviders:
                 "current_step": 7,
                 "stable_service": "frontend",
                 "canary_service": "frontend-canary",
-                "analysis_runs": [{"name": "frontend-slo-check-abc", "phase": "Successful"}],
+                "analysis_runs": [
+                    {
+                        "name": "frontend-slo-check-abc",
+                        "phase": "Successful",
+                        "owner_kind": "Rollout",
+                        "owner_name": "frontend",
+                    }
+                ],
                 "raw_status": {"ignored": True},
             },
             ingress_state={
@@ -190,6 +199,10 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
         self.assertNotIn("annotations", serialized)
         self.assertIn("kubernetes.get_frontend_state", response["audit"]["provider_calls"])
         self.assertIn("prometheus.query_template.slo_error_ratio_5m", response["audit"]["provider_calls"])
+        self.assertEqual(response["audit"]["caller_identity"], "staging-evidence-client")
+        self.assertEqual(response["audit"]["request_id"], "req-nonce-001")
+        self.assertIn("result_digest", response["audit"])
+        self.assertIn("response_bytes", response["audit"])
 
     def test_subset_kind_collects_only_requested_provider(self) -> None:
         request = base_request()
@@ -204,6 +217,10 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
             "prometheus.query_template.slo_burn_rate_5m",
             "prometheus.query_template.slo_error_ratio_5m",
         })
+        first_call = response["audit"]["provider_call_params"][0]
+        self.assertEqual(first_call["params"]["start"], iso(-20))
+        self.assertEqual(first_call["params"]["end"], iso(0))
+        self.assertEqual(first_call["params"]["target"]["namespace"], "online-shop-stage")
 
     def test_unsafe_log_line_is_redacted_deterministically(self) -> None:
         providers = fake_providers()
@@ -289,6 +306,11 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
         request["time_range"] = {"start": iso(0), "end": iso(-1)}
         self.assert_denied_without_provider_calls(request, "invalid_time_range")
 
+    def test_future_time_window_is_denied(self) -> None:
+        request = base_request()
+        request["time_range"] = {"start": iso(1), "end": iso(2)}
+        self.assert_denied_without_provider_calls(request, "invalid_time_range")
+
     def test_over_sixty_minute_window_is_denied(self) -> None:
         request = base_request()
         request["time_range"] = {"start": iso(-61), "end": iso(0)}
@@ -332,6 +354,8 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
         self.assertEqual(second["outcome"], "denied")
         self.assertEqual(second["error"]["code"], "replay_rejected")
         self.assertEqual(providers.total_calls(), before)
+        self.assertEqual(second["audit"]["provider_calls"], {})
+        self.assertEqual(second["audit"]["provider_call_count"], 0)
 
     def test_malformed_request_does_not_consume_nonce(self) -> None:
         policy = EvidencePolicy()
@@ -371,6 +395,39 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
         self.assertEqual(response["outcome"], "denied")
         self.assertEqual(response["error"]["code"], "out_of_scope")
 
+    def test_secret_frontend_event_fails_closed(self) -> None:
+        providers = fake_providers()
+        providers.kubernetes.events[0]["involved_kind"] = "Secret"
+        providers.kubernetes.events[0]["involved_name"] = "frontend"
+        response = gateway(providers).collect(base_request("nonce-secret-event"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "out_of_scope")
+
+    def test_event_timestamp_outside_window_fails_closed(self) -> None:
+        providers = fake_providers()
+        providers.kubernetes.events[0]["timestamp"] = iso(-21)
+        response = gateway(providers).collect(base_request("nonce-old-event"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "outside_time_range")
+
+    def test_unowned_analysis_run_fails_closed(self) -> None:
+        providers = fake_providers()
+        providers.kubernetes.rollout_state["analysis_runs"][0]["owner_name"] = "cart"
+        response = gateway(providers).collect(base_request("nonce-unowned-analysis"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "out_of_scope")
+
+    def test_stage_private_ingress_path_fails_closed(self) -> None:
+        providers = fake_providers()
+        providers.kubernetes.ingress_state["paths"] = ["/stage-private"]
+        response = gateway(providers).collect(base_request("nonce-stage-private"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "out_of_scope")
+
     def test_provider_non_frontend_log_fails_closed(self) -> None:
         providers = fake_providers()
         providers.logs.lines[0]["container"] = "cart"
@@ -379,10 +436,29 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
         self.assertEqual(response["outcome"], "denied")
         self.assertEqual(response["error"]["code"], "out_of_scope")
 
+    def test_log_timestamp_outside_window_fails_closed(self) -> None:
+        providers = fake_providers()
+        providers.logs.lines[0]["timestamp"] = iso(-21)
+        response = gateway(providers).collect(base_request("nonce-old-log"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "outside_time_range")
+
     def test_oversized_logs_fail_closed(self) -> None:
         providers = fake_providers()
         providers.logs.lines = [copy.deepcopy(providers.logs.lines[0]) for _ in range(81)]
         response = gateway(providers).collect(base_request("nonce-big-logs"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "oversized_result")
+
+    def test_oversized_nested_conditions_fail_closed_before_projection(self) -> None:
+        providers = fake_providers()
+        providers.kubernetes.workload_state["conditions"] = [
+            {"type": "Available", "status": "True", "reason": "MinimumReplicasAvailable"}
+            for _ in range(9)
+        ]
+        response = gateway(providers).collect(base_request("nonce-big-conditions"), now=NOW)
 
         self.assertEqual(response["outcome"], "denied")
         self.assertEqual(response["error"]["code"], "oversized_result")
@@ -418,6 +494,114 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
 
         self.assertEqual(response["outcome"], "denied")
         self.assertEqual(response["error"]["code"], "out_of_scope")
+
+    def test_prometheus_conflicting_service_fails_closed(self) -> None:
+        providers = fake_providers()
+        providers.prometheus.values_by_template["slo_error_ratio_5m"][0]["labels"]["service"] = "cart"
+        response = gateway(providers).collect(base_request("nonce-prom-cart"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "out_of_scope")
+
+    def test_prometheus_conflicting_ingress_fails_closed(self) -> None:
+        providers = fake_providers()
+        providers.prometheus.values_by_template["slo_error_ratio_5m"][0]["labels"]["ingress"] = "stage-private"
+        response = gateway(providers).collect(base_request("nonce-prom-ingress"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "out_of_scope")
+
+    def test_prometheus_timestamp_outside_window_fails_closed(self) -> None:
+        providers = fake_providers()
+        providers.prometheus.values_by_template["slo_error_ratio_5m"][0]["timestamp"] = iso(-21)
+        response = gateway(providers).collect(base_request("nonce-old-prom"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "outside_time_range")
+
+    def test_prometheus_non_finite_value_fails_closed(self) -> None:
+        for value, nonce in [(float("nan"), "nonce-prom-nan"), (float("inf"), "nonce-prom-inf")]:
+            providers = fake_providers()
+            providers.prometheus.values_by_template["slo_error_ratio_5m"][0]["value"] = value
+            response = gateway(providers).collect(base_request(nonce), now=NOW)
+
+            self.assertEqual(response["outcome"], "denied")
+            self.assertEqual(response["error"]["code"], "malformed_provider_data")
+
+    def test_non_string_projected_field_fails_closed(self) -> None:
+        providers = fake_providers()
+        providers.logs.lines[0]["message"] = {"raw": "not allowed"}
+        response = gateway(providers).collect(base_request("nonce-non-string"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "malformed_provider_data")
+
+    def test_provider_unavailable_is_safe_backend_unavailable(self) -> None:
+        class UnavailablePrometheusProvider(FakePrometheusProvider):
+            def query_template(self, template_id, *, target, start, end):
+                self.calls.increment(
+                    f"prometheus.query_template.{template_id}",
+                    {"template_id": template_id, "target": target, "start": start, "end": end},
+                )
+                raise ProviderError("secret backend detail")
+
+        providers = fake_providers()
+        providers.prometheus = UnavailablePrometheusProvider(providers.prometheus.values_by_template)
+        response = gateway(providers).collect(base_request("nonce-provider-error"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "backend_unavailable")
+        self.assertNotIn("secret backend detail", str(response))
+
+    def test_malformed_provider_output_is_safe_error(self) -> None:
+        providers = fake_providers()
+        providers.kubernetes.workload_state = []
+        response = gateway(providers).collect(base_request("nonce-malformed-output"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "malformed_provider_data")
+
+    def test_cumulative_audit_does_not_contaminate_current_request(self) -> None:
+        providers = fake_providers()
+        policy = EvidencePolicy()
+        first_request = base_request("nonce-audit-first")
+        first_request["evidence_kinds"] = ["logs"]
+        first = gateway(providers, policy).collect(first_request, now=NOW)
+        self.assertEqual(first["outcome"], "allowed")
+
+        second_request = base_request("nonce-audit-second")
+        second_request["evidence_kinds"] = ["prometheus"]
+        second = gateway(providers, policy).collect(second_request, now=NOW)
+
+        self.assertEqual(second["outcome"], "allowed")
+        self.assertEqual(set(second["audit"]["provider_calls"]), {
+            "prometheus.query_template.slo_burn_rate_5m",
+            "prometheus.query_template.slo_error_ratio_5m",
+        })
+        self.assertNotIn("logs.get_frontend_container_logs", second["audit"]["provider_calls"])
+
+    def test_replay_state_expires_nonce(self) -> None:
+        providers = fake_providers()
+        policy = EvidencePolicy()
+        first_response = gateway(providers, policy).collect(base_request("nonce-expiring"), now=NOW)
+        self.assertEqual(first_response["outcome"], "allowed")
+
+        second = base_request("nonce-expiring")
+        second["auth"]["issued_at"] = iso(5)
+        second["auth"]["expires_at"] = iso(10)
+        second_response = gateway(providers, policy).collect(second, now=NOW + timedelta(minutes=6))
+
+        self.assertEqual(second_response["outcome"], "allowed")
+
+    def test_replay_state_capacity_fails_closed(self) -> None:
+        policy = EvidencePolicy(limits=EvidenceLimits(max_replay_entries=1), replay_guard=ReplayGuard())
+        first = gateway(fake_providers(), policy).collect(base_request("nonce-capacity-a"), now=NOW)
+        second = gateway(fake_providers(), policy).collect(base_request("nonce-capacity-b"), now=NOW)
+
+        self.assertEqual(first["outcome"], "allowed")
+        self.assertEqual(second["outcome"], "denied")
+        self.assertEqual(second["error"]["code"], "replay_capacity_exceeded")
+        self.assertEqual(second["audit"]["provider_calls"], {})
 
 
 if __name__ == "__main__":

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 from typing import Any
 
 from .canonical import canonical_json, sha256_hex
 from .policy import (
     GITOPS_PATH_IDS,
-    MAX_RESULT_BYTES,
     PROMETHEUS_TEMPLATE_IDS,
     SCHEMA_VERSION,
     EvidenceError,
@@ -16,7 +16,7 @@ from .policy import (
     contains_unsafe_text,
     sanitize_string,
 )
-from .providers import EvidenceProviders
+from .providers import EvidenceProviders, ProviderError
 
 GITOPS_PATHS = {
     "stage_argocd_application": "environments/stage/argocd/apps/online-shop-stage.yaml",
@@ -33,6 +33,15 @@ PROMETHEUS_TEMPLATES = {
     "slo_burn_rate_5m": "slo:burn_rate_5m",
 }
 
+APPROVED_INGRESS_PATHS = frozenset({"/stage"})
+APPROVED_EVENT_OBJECTS = frozenset(
+    {
+        ("Rollout", "frontend"),
+        ("Deployment", "frontend"),
+        ("Ingress", "online-shop-frontend"),
+    }
+)
+
 
 class EvidenceGateway:
     def __init__(self, policy: EvidencePolicy, providers: EvidenceProviders) -> None:
@@ -40,15 +49,31 @@ class EvidenceGateway:
         self.providers = providers
 
     def collect(self, request: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+        call_mark = self.providers.mark()
+        approved_request: dict[str, Any] | None = None
+        request_fingerprint: str | None = None
         try:
             approved_request = self.policy.validate_request(request, now=now)
-            request_fingerprint = sha256_hex(approved_request)
+            request_fingerprint = sha256_hex(
+                {
+                    key: value
+                    for key, value in approved_request.items()
+                    if key not in {"request_id", "caller_identity"}
+                }
+            )
             result = self._collect_approved(approved_request)
-            result_bytes = len(canonical_json(result).encode("utf-8"))
-            if result_bytes > self.policy.limits.max_result_bytes:
-                raise EvidenceError("oversized_result", "sanitized evidence result exceeds byte limit")
-            evidence_id = sha256_hex(result)
-            return {
+            result_digest = sha256_hex(result)
+            source_revision = result.get("source_revision")
+            evidence_context = {
+                "schema_version": SCHEMA_VERSION,
+                "type": "staging_frontend_evidence",
+                "target": approved_request["target"],
+                "time_range": approved_request["time_range"],
+                "source_revision": source_revision,
+                "result_digest": result_digest,
+            }
+            evidence_id = sha256_hex(evidence_context)
+            envelope = {
                 "schema_version": SCHEMA_VERSION,
                 "outcome": "allowed",
                 "request_fingerprint": request_fingerprint,
@@ -57,94 +82,238 @@ class EvidenceGateway:
                 "time_range": approved_request["time_range"],
                 "limits": approved_request["limits"],
                 "result": result,
-                "audit": {
-                    "decision": "allowed",
-                    "provider_calls": self.providers.call_snapshot(),
-                    "result_bytes": result_bytes,
-                },
             }
+            result_bytes = len(canonical_json(result).encode("utf-8"))
+            envelope["audit"] = self._audit(
+                call_mark,
+                approved_request=approved_request,
+                decision="allowed",
+                request_fingerprint=request_fingerprint,
+                evidence_id=evidence_id,
+                result_digest=result_digest,
+                result=result,
+                result_bytes=result_bytes,
+                revision=source_revision,
+            )
+            response_bytes = len(canonical_json(envelope).encode("utf-8"))
+            if response_bytes > self.policy.limits.max_result_bytes:
+                raise EvidenceError("oversized_result", "serialized evidence response exceeds byte limit")
+            envelope["audit"]["response_bytes"] = response_bytes
+            return envelope
+        except ProviderError:
+            return self._denied(
+                call_mark,
+                "backend_unavailable",
+                "approved evidence backend is unavailable",
+                approved_request=approved_request,
+                request_fingerprint=request_fingerprint,
+            )
         except EvidenceError as exc:
-            return {
-                "schema_version": SCHEMA_VERSION,
-                "outcome": "denied",
-                "error": {"code": exc.code, "message": exc.message},
-                "audit": {
-                    "decision": "denied",
-                    "provider_calls": self.providers.call_snapshot(),
-                },
-            }
+            return self._denied(
+                call_mark,
+                exc.code,
+                exc.message,
+                approved_request=approved_request,
+                request_fingerprint=request_fingerprint,
+            )
+
+    def _denied(
+        self,
+        call_mark: dict[str, int],
+        code: str,
+        message: str,
+        *,
+        approved_request: dict[str, Any] | None,
+        request_fingerprint: str | None,
+    ) -> dict[str, Any]:
+        audit = self._audit(
+            call_mark,
+            approved_request=approved_request,
+            decision="denied",
+            denial_reason=code,
+            request_fingerprint=request_fingerprint,
+        )
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "outcome": "denied",
+            "error": {"code": code, "message": message},
+            "audit": audit,
+        }
+
+    def _audit(
+        self,
+        call_mark: dict[str, int],
+        *,
+        approved_request: dict[str, Any] | None,
+        decision: str,
+        denial_reason: str | None = None,
+        request_fingerprint: str | None = None,
+        evidence_id: str | None = None,
+        result_digest: str | None = None,
+        result: dict[str, Any] | None = None,
+        result_bytes: int = 0,
+        revision: str | None = None,
+    ) -> dict[str, Any]:
+        provider_calls = self.providers.call_snapshot_since(call_mark)
+        provider_call_params = self.providers.call_records_since(call_mark)
+        audit: dict[str, Any] = {
+            "decision": decision,
+            "denial_reason": denial_reason,
+            "provider_calls": provider_calls,
+            "provider_call_params": provider_call_params,
+            "provider_call_count": sum(provider_calls.values()),
+            "result_bytes": result_bytes,
+        }
+        if approved_request is not None:
+            audit.update(
+                {
+                    "request_id": approved_request["request_id"],
+                    "caller_identity": approved_request["caller_identity"],
+                    "operation": approved_request["operation"],
+                    "target": approved_request["target"],
+                    "time_range": approved_request["time_range"],
+                }
+            )
+        if request_fingerprint is not None:
+            audit["request_fingerprint"] = request_fingerprint
+        if evidence_id is not None:
+            audit["evidence_id"] = evidence_id
+        if result_digest is not None:
+            audit["result_digest"] = result_digest
+        if revision is not None:
+            audit["revision"] = revision
+        if result is not None:
+            audit["counts"] = _count_result(result)
+        return audit
 
     def _collect_approved(self, approved_request: dict[str, Any]) -> dict[str, Any]:
         kinds = set(approved_request["evidence_kinds"])
+        context = self._context(approved_request)
         sections: list[dict[str, Any]] = []
-        if {"kubernetes_state", "kubernetes_events"} & kinds:
-            if "kubernetes_state" in kinds:
-                sections.append(self._kubernetes_state_section())
-            if "kubernetes_events" in kinds:
-                sections.append(self._kubernetes_events_section())
-        if "logs" in kinds:
-            sections.append(self._logs_section())
-        if "prometheus" in kinds:
-            sections.append(self._prometheus_section())
         deployment_revision = None
+        if "kubernetes_state" in kinds:
+            sections.append(self._kubernetes_state_section(context))
+        if "kubernetes_events" in kinds:
+            sections.append(self._kubernetes_events_section(context))
+        if "logs" in kinds:
+            sections.append(self._logs_section(context))
+        if "prometheus" in kinds:
+            sections.append(self._prometheus_section(context))
         if "deployment_revision" in kinds or "gitops" in kinds:
-            deployment_revision = self._deployment_revision()
+            deployment_revision = self._deployment_revision(context)
             if "deployment_revision" in kinds:
                 sections.append({"kind": "deployment_revision", "data": deployment_revision})
         if "gitops" in kinds:
             if deployment_revision is None:
-                deployment_revision = self._deployment_revision()
-            sections.append(self._gitops_section(deployment_revision["revision"]))
+                deployment_revision = self._deployment_revision(context)
+            sections.append(self._gitops_section(context, deployment_revision["revision"]))
 
         if len(sections) > self.policy.limits.max_evidence_items:
             raise EvidenceError("oversized_result", "evidence item count exceeds limit")
-        return {"sections": sections, "section_count": len(sections)}
+        return {
+            "sections": sections,
+            "section_count": len(sections),
+            "source_revision": deployment_revision["revision"] if deployment_revision else None,
+        }
 
-    def _kubernetes_state_section(self) -> dict[str, Any]:
-        raw = self.providers.kubernetes.get_frontend_state()
-        workload = self._project_workload(raw.get("workload", {}))
-        rollout = self._project_rollout(raw.get("rollout", {}))
-        ingress = self._project_ingress(raw.get("ingress", {}))
+    def _context(self, approved_request: dict[str, Any]) -> dict[str, Any]:
+        start = _parse_approved_time(approved_request["time_range"]["start"])
+        end = _parse_approved_time(approved_request["time_range"]["end"])
+        return {
+            "target": approved_request["target"],
+            "start": start,
+            "end": end,
+            "start_text": approved_request["time_range"]["start"],
+            "end_text": approved_request["time_range"]["end"],
+        }
+
+    def _kubernetes_state_section(self, context: dict[str, Any]) -> dict[str, Any]:
+        raw = _expect_mapping(
+            self.providers.kubernetes.get_frontend_state(target=context["target"]),
+            "kubernetes frontend state",
+        )
+        workload = self._project_workload(_expect_mapping(raw.get("workload"), "workload state"))
+        rollout = self._project_rollout(_expect_mapping(raw.get("rollout"), "rollout state"))
+        ingress = self._project_ingress(_expect_mapping(raw.get("ingress"), "ingress state"))
         return {
             "kind": "kubernetes_state",
             "data": {"workload": workload, "rollout": rollout, "ingress": ingress},
         }
 
-    def _kubernetes_events_section(self) -> dict[str, Any]:
-        events = [self._project_event(item) for item in self.providers.kubernetes.get_frontend_events()]
-        if len(events) > self.policy.limits.max_evidence_items:
+    def _kubernetes_events_section(self, context: dict[str, Any]) -> dict[str, Any]:
+        raw_events = _expect_sequence(
+            self.providers.kubernetes.get_frontend_events(
+                target=context["target"],
+                start=context["start_text"],
+                end=context["end_text"],
+            ),
+            "events",
+        )
+        if len(raw_events) > self.policy.limits.max_events:
             raise EvidenceError("oversized_result", "event count exceeds limit")
+        events = [
+            self._project_event(_expect_mapping(item, "event"), context["start"], context["end"])
+            for item in raw_events
+        ]
         return {"kind": "kubernetes_events", "data": {"events": events}}
 
-    def _logs_section(self) -> dict[str, Any]:
+    def _logs_section(self, context: dict[str, Any]) -> dict[str, Any]:
         projected = []
         total_bytes = 0
-        raw_lines = self.providers.logs.get_frontend_container_logs()
+        raw_lines = _expect_sequence(
+            self.providers.logs.get_frontend_container_logs(
+                target=context["target"],
+                start=context["start_text"],
+                end=context["end_text"],
+                container=self.policy.target.workload,
+            ),
+            "log lines",
+        )
         if len(raw_lines) > self.policy.limits.max_log_lines:
             raise EvidenceError("oversized_result", "log line count exceeds limit")
         for item in raw_lines:
-            line = self._project_log_line(item)
+            line = self._project_log_line(_expect_mapping(item, "log line"), context["start"], context["end"])
             total_bytes += len(canonical_json(line).encode("utf-8"))
             if total_bytes > self.policy.limits.max_log_bytes:
                 raise EvidenceError("oversized_result", "log byte count exceeds limit")
             projected.append(line)
         return {"kind": "logs", "data": {"lines": projected, "line_count": len(projected)}}
 
-    def _prometheus_section(self) -> dict[str, Any]:
+    def _prometheus_section(self, context: dict[str, Any]) -> dict[str, Any]:
         series = []
         for template_id in sorted(PROMETHEUS_TEMPLATE_IDS):
-            values = self.providers.prometheus.query_template(template_id)
+            raw_values = _expect_sequence(
+                self.providers.prometheus.query_template(
+                    template_id,
+                    target=context["target"],
+                    start=context["start_text"],
+                    end=context["end_text"],
+                ),
+                "prometheus values",
+            )
+            if len(raw_values) > self.policy.limits.max_prometheus_values:
+                raise EvidenceError("oversized_result", "prometheus value count exceeds limit")
             series.append(
                 {
                     "template_id": template_id,
                     "expression_name": PROMETHEUS_TEMPLATES[template_id],
-                    "values": [self._project_prometheus_value(item) for item in values],
+                    "values": [
+                        self._project_prometheus_value(
+                            _expect_mapping(item, "prometheus value"),
+                            context["start"],
+                            context["end"],
+                        )
+                        for item in raw_values
+                    ],
                 }
             )
         return {"kind": "prometheus", "data": {"series": series}}
 
-    def _deployment_revision(self) -> dict[str, Any]:
-        app = self.providers.gitops.get_deployment_revision()
+    def _deployment_revision(self, context: dict[str, Any]) -> dict[str, Any]:
+        app = _expect_mapping(
+            self.providers.gitops.get_deployment_revision(target=context["target"]),
+            "deployment revision",
+        )
         name = app.get("application")
         revision = app.get("revision")
         if name != self.policy.target.argocd_application:
@@ -158,100 +327,120 @@ class EvidenceGateway:
             "health_status": sanitize_string(app.get("health_status"), max_length=32),
         }
 
-    def _gitops_section(self, revision: str) -> dict[str, Any]:
+    def _gitops_section(self, context: dict[str, Any], revision: str) -> dict[str, Any]:
         files = []
         for path_id in sorted(GITOPS_PATH_IDS):
-            item = self.providers.gitops.read_file_at_revision(path_id, revision)
+            item = _expect_mapping(
+                self.providers.gitops.read_file_at_revision(path_id, revision, target=context["target"]),
+                "gitops file",
+            )
             files.append(self._project_gitops_file(path_id, item, revision))
         return {"kind": "gitops", "data": {"revision": revision, "files": files}}
 
     def _project_workload(self, raw: dict[str, Any]) -> dict[str, Any]:
         if raw.get("namespace") != self.policy.target.namespace or raw.get("name") != self.policy.target.workload:
             raise EvidenceError("out_of_scope", "workload state is outside approved target")
+        conditions = _expect_sequence(raw.get("conditions", []), "workload conditions")
+        if len(conditions) > self.policy.limits.max_conditions:
+            raise EvidenceError("oversized_result", "condition count exceeds limit")
         return {
-            "name": raw["name"],
-            "namespace": raw["namespace"],
+            "name": sanitize_string(raw.get("name"), max_length=128),
+            "namespace": sanitize_string(raw.get("namespace"), max_length=128),
             "ready_replicas": _safe_int(raw.get("ready_replicas")),
             "desired_replicas": _safe_int(raw.get("desired_replicas")),
             "available_replicas": _safe_int(raw.get("available_replicas")),
-            "conditions": [_project_condition(item) for item in raw.get("conditions", [])],
+            "conditions": [_project_condition(_expect_mapping(item, "condition")) for item in conditions],
         }
 
     def _project_rollout(self, raw: dict[str, Any]) -> dict[str, Any]:
         if raw.get("namespace") != self.policy.target.namespace or raw.get("name") != self.policy.target.rollout:
             raise EvidenceError("out_of_scope", "rollout state is outside approved target")
+        analysis_runs = _expect_sequence(raw.get("analysis_runs", []), "analysis runs")
+        if len(analysis_runs) > self.policy.limits.max_analysis_runs:
+            raise EvidenceError("oversized_result", "analysis run count exceeds limit")
         return {
-            "name": raw["name"],
-            "namespace": raw["namespace"],
+            "name": sanitize_string(raw.get("name"), max_length=128),
+            "namespace": sanitize_string(raw.get("namespace"), max_length=128),
             "phase": sanitize_string(raw.get("phase"), max_length=64),
             "current_step": _safe_int(raw.get("current_step")),
             "stable_service": self._expect_name(raw.get("stable_service"), self.policy.target.service, "stable service"),
             "canary_service": self._expect_name(raw.get("canary_service"), "frontend-canary", "canary service"),
             "analysis_runs": [
-                {
-                    "name": sanitize_string(item.get("name"), max_length=128),
-                    "phase": sanitize_string(item.get("phase"), max_length=64),
-                }
-                for item in raw.get("analysis_runs", [])
+                self._project_analysis_run(_expect_mapping(item, "analysis run")) for item in analysis_runs
             ],
+        }
+
+    def _project_analysis_run(self, raw: dict[str, Any]) -> dict[str, Any]:
+        if raw.get("owner_kind") != "Rollout" or raw.get("owner_name") != self.policy.target.rollout:
+            raise EvidenceError("out_of_scope", "analysis run owner is not the approved frontend rollout")
+        return {
+            "name": sanitize_string(raw.get("name"), max_length=128),
+            "phase": sanitize_string(raw.get("phase"), max_length=64),
+            "owner_kind": "Rollout",
+            "owner_name": self.policy.target.rollout,
         }
 
     def _project_ingress(self, raw: dict[str, Any]) -> dict[str, Any]:
         if raw.get("namespace") != self.policy.target.namespace or raw.get("name") != self.policy.target.ingress:
             raise EvidenceError("out_of_scope", "ingress state is outside approved target")
-        paths = raw.get("paths", [])
-        if not isinstance(paths, list) or any(not isinstance(path, str) for path in paths):
+        paths = _expect_sequence(raw.get("paths", []), "ingress paths")
+        if any(not isinstance(path, str) for path in paths):
             raise EvidenceError("malformed_provider_data", "ingress paths are malformed")
-        allowed_paths = [path for path in paths if path.startswith("/stage")]
-        if len(allowed_paths) != len(paths):
-            raise EvidenceError("out_of_scope", "ingress path is outside approved stage prefix")
+        if any(path not in APPROVED_INGRESS_PATHS for path in paths):
+            raise EvidenceError("out_of_scope", "ingress path is outside approved stage path")
         return {
-            "name": raw["name"],
-            "namespace": raw["namespace"],
+            "name": sanitize_string(raw.get("name"), max_length=128),
+            "namespace": sanitize_string(raw.get("namespace"), max_length=128),
             "class_name": sanitize_string(raw.get("class_name"), max_length=64),
-            "paths": allowed_paths,
+            "paths": list(paths),
         }
 
-    def _project_event(self, raw: dict[str, Any]) -> dict[str, Any]:
+    def _project_event(self, raw: dict[str, Any], start: datetime, end: datetime) -> dict[str, Any]:
         if raw.get("namespace") != self.policy.target.namespace:
             raise EvidenceError("out_of_scope", "event is outside approved namespace")
+        involved_kind = raw.get("involved_kind")
         involved_name = raw.get("involved_name")
-        if involved_name not in {self.policy.target.workload, self.policy.target.rollout, self.policy.target.ingress}:
+        if (involved_kind, involved_name) not in APPROVED_EVENT_OBJECTS:
             raise EvidenceError("out_of_scope", "event is outside approved involved object set")
+        timestamp = _safe_timestamp(raw.get("timestamp"), start=start, end=end)
         return {
-            "timestamp": _safe_timestamp(raw.get("timestamp")),
+            "timestamp": timestamp,
             "type": sanitize_string(raw.get("type"), max_length=32),
             "reason": sanitize_string(raw.get("reason"), max_length=64),
             "message": sanitize_string(raw.get("message"), max_length=self.policy.limits.max_event_message_length),
-            "involved_kind": sanitize_string(raw.get("involved_kind"), max_length=64),
+            "involved_kind": involved_kind,
             "involved_name": involved_name,
         }
 
-    def _project_log_line(self, raw: dict[str, Any]) -> dict[str, Any]:
+    def _project_log_line(self, raw: dict[str, Any], start: datetime, end: datetime) -> dict[str, Any]:
         if raw.get("namespace") != self.policy.target.namespace:
             raise EvidenceError("out_of_scope", "log line is outside approved namespace")
         if raw.get("workload") != self.policy.target.workload or raw.get("container") != self.policy.target.workload:
             raise EvidenceError("out_of_scope", "log line is outside approved frontend container")
         message = sanitize_string(raw.get("message"), max_length=self.policy.limits.max_log_line_length)
         return {
-            "timestamp": _safe_timestamp(raw.get("timestamp")),
+            "timestamp": _safe_timestamp(raw.get("timestamp"), start=start, end=end),
             "pod": sanitize_string(raw.get("pod"), max_length=128),
             "container": self.policy.target.workload,
             "message": message,
         }
 
-    def _project_prometheus_value(self, raw: dict[str, Any]) -> dict[str, Any]:
-        labels = raw.get("labels", {})
-        if not isinstance(labels, dict):
-            raise EvidenceError("malformed_provider_data", "prometheus labels are malformed")
+    def _project_prometheus_value(self, raw: dict[str, Any], start: datetime, end: datetime) -> dict[str, Any]:
+        labels = _expect_mapping(raw.get("labels"), "prometheus labels")
         namespace = labels.get("exported_namespace") or labels.get("namespace")
         if namespace not in {None, self.policy.target.namespace}:
             raise EvidenceError("out_of_scope", "prometheus value is outside approved namespace")
+        if labels.get("namespace") not in {None, self.policy.target.namespace}:
+            raise EvidenceError("out_of_scope", "prometheus value has conflicting namespace label")
+        if labels.get("service") not in {None, self.policy.target.service}:
+            raise EvidenceError("out_of_scope", "prometheus value has conflicting service label")
+        if labels.get("ingress") not in {None, self.policy.target.ingress}:
+            raise EvidenceError("out_of_scope", "prometheus value has conflicting ingress label")
         return {
-            "timestamp": _safe_timestamp(raw.get("timestamp")),
+            "timestamp": _safe_timestamp(raw.get("timestamp"), start=start, end=end),
             "value": _safe_float(raw.get("value")),
             "labels": {
-                key: sanitize_string(labels.get(key), max_length=80)
+                key: sanitize_string(labels[key], max_length=80)
                 for key in sorted(set(labels) & {"exported_namespace", "namespace", "service", "ingress"})
             },
         }
@@ -300,10 +489,13 @@ def _safe_int(value: Any) -> int:
 def _safe_float(value: Any) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise EvidenceError("malformed_provider_data", "numeric provider value is malformed")
-    return float(value)
+    numeric = float(value)
+    if not math.isfinite(numeric):
+        raise EvidenceError("malformed_provider_data", "numeric provider value must be finite")
+    return numeric
 
 
-def _safe_timestamp(value: Any) -> str:
+def _safe_timestamp(value: Any, *, start: datetime, end: datetime) -> str:
     if not isinstance(value, str) or len(value) > 40:
         raise EvidenceError("malformed_provider_data", "timestamp provider value is malformed")
     if contains_unsafe_text(value):
@@ -314,4 +506,39 @@ def _safe_timestamp(value: Any) -> str:
         raise EvidenceError("malformed_provider_data", "timestamp provider value is malformed") from exc
     if parsed.tzinfo is None:
         raise EvidenceError("malformed_provider_data", "timestamp provider value must include timezone")
-    return parsed.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    timestamp = parsed.astimezone(UTC).replace(microsecond=0)
+    if timestamp < start or timestamp > end:
+        raise EvidenceError("outside_time_range", "provider evidence timestamp is outside the approved time range")
+    return timestamp.isoformat().replace("+00:00", "Z")
+
+
+def _parse_approved_time(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC).replace(microsecond=0)
+
+
+def _expect_mapping(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise EvidenceError("malformed_provider_data", f"{label} must be an object")
+    return value
+
+
+def _expect_sequence(value: Any, label: str) -> list[Any]:
+    if not isinstance(value, list):
+        raise EvidenceError("malformed_provider_data", f"{label} must be an array")
+    return value
+
+
+def _count_result(result: dict[str, Any]) -> dict[str, int]:
+    counts: dict[str, int] = {"sections": len(result.get("sections", []))}
+    for section in result.get("sections", []):
+        kind = section.get("kind")
+        data = section.get("data", {})
+        if kind == "kubernetes_events":
+            counts["events"] = len(data.get("events", []))
+        elif kind == "logs":
+            counts["log_lines"] = len(data.get("lines", []))
+        elif kind == "prometheus":
+            counts["prometheus_values"] = sum(len(series.get("values", [])) for series in data.get("series", []))
+        elif kind == "gitops":
+            counts["gitops_files"] = len(data.get("files", []))
+    return counts

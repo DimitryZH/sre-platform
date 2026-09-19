@@ -25,9 +25,15 @@ owned by the server policy and fixed to the approved staging target:
 - Argo CD Application: `online-shop-stage`
 - maximum time range: 60 minutes
 
+The only B1 caller identity is the neutral `staging-evidence-client`. This is
+an offline contract identity, not a HolmesGPT or AI Operations identity. The
+concrete private transport identity is intentionally deferred to B3.
+
 All providers in B1 are fake in-memory providers. They are used only to prove
 contract shape, projection, sanitization, limits, fail-closed behavior, and
-zero provider calls for policy rejections.
+zero provider calls for policy rejections. Provider parameters are built only
+from the validated server-approved request and include the approved target plus
+the approved start/end time range where applicable.
 
 ## Allowed Evidence
 
@@ -49,6 +55,10 @@ The namespace-only ingress request-rate query is intentionally not included in
 B1 because the current contract does not prove an exact frontend/ingress
 boundary for that expression.
 
+Prometheus samples must not contain conflicting `namespace`,
+`exported_namespace`, `service`, or `ingress` labels. Samples with `NaN`,
+`Infinity`, or timestamps outside the approved time window fail closed.
+
 Allowed GitOps path IDs are:
 
 - `stage_argocd_application`
@@ -64,6 +74,17 @@ the approved Argo CD Application contract. Caller-supplied repository, ref,
 path, wildcard, traversal, Terraform, private, or arbitrary file access is not
 part of the request schema.
 
+Kubernetes Events are limited to exact approved `(kind, name)` pairs:
+
+- `Rollout/frontend`
+- `Deployment/frontend`
+- `Ingress/online-shop-frontend`
+
+AnalysisRuns are returned only when ownership is deterministically proven by
+`Rollout/frontend`. Ingress paths must match the exact approved `/stage` path.
+Events, log lines, and Prometheus samples must fall inside the approved
+request time range.
+
 ## Limits
 
 The B1 core enforces conservative offline limits:
@@ -77,9 +98,18 @@ The B1 core enforces conservative offline limits:
 - log bytes: 8 KiB
 - GitOps file bytes: 4 KiB per approved file
 - event message length: 240 characters
+- workload conditions: 8
+- Rollout AnalysisRuns: 8
+- Events: 16
+- Prometheus values per template: 16
+- replay entries: 128, expiry-aware and fail-closed at capacity
+- offline per-subject rate policy: 60 requests per minute, in memory only
 
-Unknown, malformed, stale, replayed, mutation-like, out-of-scope, ambiguous,
-unsafe, or oversized requests fail closed before any provider is called.
+Unknown, malformed, future-window, stale, replayed, mutation-like,
+out-of-scope, ambiguous, unsafe, malformed-provider, unavailable-backend, or
+oversized requests fail closed. Policy rejections happen before any provider is
+called; provider failures return deterministic safe errors without backend
+detail leakage.
 
 ## Identifiers
 
@@ -91,17 +121,19 @@ SHA256(canonical JSON of the approved request)
 
 The approved request is the server-normalized operation, fixed target, bounded
 time range, requested approved evidence kinds, limits, Prometheus template IDs,
-and GitOps path IDs. Authentication material is validated but not included in
-the approved request fingerprint.
+and GitOps path IDs. Authentication material, request IDs, and caller identity
+are validated but not included in the approved request fingerprint.
 
 `evidence_id` is:
 
 ```text
-SHA256(canonical JSON of the sanitized result)
+SHA256(canonical JSON of schema/type, approved target, approved time range,
+source revision where applicable, and result digest)
 ```
 
 The result is projected into explicit allowlisted fields before hashing. Raw
-backend objects are never returned.
+backend objects are never returned. Canonical JSON is deterministic and rejects
+non-standard numeric values.
 
 ## Response Boundary
 
@@ -112,9 +144,14 @@ Allowed envelopes are:
 - denied envelope: schema version, outcome, deterministic error code/message,
   and audit metadata.
 
-Provider call counts are included in B1 audit metadata so tests can prove
-policy rejections caused zero provider calls. A future deployment-facing
-envelope may remove or further restrict that diagnostic detail if needed.
+Per-request provider call counts and exact safe provider parameters are
+included in B1 audit metadata so tests can prove policy rejections caused zero
+provider calls and replay denials do not reuse cumulative audit state. Audit
+also includes the validated request ID, safe caller identity, operation, target,
+time range, decision or denial reason, request fingerprint, evidence ID/result
+digest where available, revision where applicable, counts, and byte totals. A
+future deployment-facing envelope may remove or further restrict that
+diagnostic detail if needed.
 
 ## Non-Claims
 

@@ -10,7 +10,7 @@ from typing import Any
 def canonical_json(value: Any) -> str:
     """Return deterministic JSON for policy-approved request/result material."""
 
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
 
 
 def sha256_hex(value: Any) -> str:

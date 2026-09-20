@@ -12,8 +12,9 @@ from evidence_gateway import (
     FakeLogsProvider,
     FakePrometheusProvider,
 )
+from evidence_gateway.canonical import canonical_json
 from evidence_gateway.policy import SCHEMA_VERSION, TargetPolicy
-from evidence_gateway.policy import EvidenceLimits, ReplayGuard
+from evidence_gateway.policy import EvidenceLimits, RateLimitGuard, ReplayGuard
 from evidence_gateway.providers import EvidenceProviders, ProviderError
 
 
@@ -41,6 +42,7 @@ def base_request(nonce: str = "nonce-001") -> dict:
         "time_range": {"start": iso(-20), "end": iso(0)},
         "evidence_kinds": [
             "kubernetes_state",
+            "kubernetes_pod_status",
             "kubernetes_events",
             "logs",
             "prometheus",
@@ -86,6 +88,25 @@ def fake_providers() -> EvidenceProviders:
                 "paths": ["/stage"],
                 "annotations": {"ignored": "yes"},
             },
+            pod_status=[
+                {
+                    "pod_id": "frontend-abc",
+                    "namespace": "online-shop-stage",
+                    "workload": "frontend",
+                    "container": "frontend",
+                    "phase": "Running",
+                    "ready": True,
+                    "restart_count": 2,
+                    "container_state": "Running",
+                    "uid": "must-not-appear",
+                    "node_name": "must-not-appear",
+                    "pod_ip": "must-not-appear",
+                    "host_ip": "must-not-appear",
+                    "image_id": "must-not-appear",
+                    "labels": {"ignored": "yes"},
+                    "annotations": {"ignored": "yes"},
+                }
+            ],
             events=[
                 {
                     "timestamp": iso(-2),
@@ -197,6 +218,7 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
         self.assertNotIn("raw_secret_like_extra", serialized)
         self.assertNotIn("raw_status", serialized)
         self.assertNotIn("annotations", serialized)
+        self.assertNotIn("must-not-appear", serialized)
         self.assertIn("kubernetes.get_frontend_state", response["audit"]["provider_calls"])
         self.assertIn("prometheus.query_template.slo_error_ratio_5m", response["audit"]["provider_calls"])
         self.assertEqual(response["audit"]["caller_identity"], "staging-evidence-client")
@@ -221,6 +243,46 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
         self.assertEqual(first_call["params"]["start"], iso(-20))
         self.assertEqual(first_call["params"]["end"], iso(0))
         self.assertEqual(first_call["params"]["target"]["namespace"], "online-shop-stage")
+
+    def test_provider_calls_receive_server_owned_limits(self) -> None:
+        providers = fake_providers()
+        policy = EvidencePolicy()
+        response = gateway(providers, policy).collect(base_request("nonce-provider-limits"), now=NOW)
+        records = {record["name"]: record["params"] for record in response["audit"]["provider_call_params"]}
+
+        self.assertEqual(records["kubernetes.get_frontend_events"]["max_items"], policy.limits.max_events)
+        self.assertEqual(records["logs.get_frontend_container_logs"]["max_lines"], policy.limits.max_log_lines)
+        self.assertEqual(records["logs.get_frontend_container_logs"]["max_bytes"], policy.limits.max_log_bytes)
+        self.assertEqual(
+            records["logs.get_frontend_container_logs"]["max_line_length"], policy.limits.max_log_line_length
+        )
+        self.assertEqual(records["kubernetes.get_frontend_pod_status"]["max_pods"], policy.limits.max_pods)
+        self.assertEqual(
+            records["kubernetes.get_frontend_pod_status"]["selector"],
+            {"app.kubernetes.io/name": "frontend"},
+        )
+        for template_id in ("slo_error_ratio_5m", "slo_burn_rate_5m"):
+            self.assertEqual(
+                records[f"prometheus.query_template.{template_id}"]["max_values"],
+                policy.limits.max_prometheus_values,
+            )
+
+    def test_pod_status_is_safely_projected(self) -> None:
+        response = gateway().collect(base_request("nonce-pod-status"), now=NOW)
+        section = next(item for item in response["result"]["sections"] if item["kind"] == "kubernetes_pod_status")
+
+        self.assertEqual(
+            section["data"]["pods"],
+            [
+                {
+                    "pod_id": "frontend-abc",
+                    "phase": "Running",
+                    "ready": True,
+                    "restart_count": 2,
+                    "container_state": "Running",
+                }
+            ],
+        )
 
     def test_unsafe_log_line_is_redacted_deterministically(self) -> None:
         providers = fake_providers()
@@ -356,6 +418,13 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
         self.assertEqual(providers.total_calls(), before)
         self.assertEqual(second["audit"]["provider_calls"], {})
         self.assertEqual(second["audit"]["provider_call_count"], 0)
+        self.assertEqual(second["audit"]["denial_reason"], "replay_rejected")
+        self.assertEqual(second["audit"]["request_id"], "req-nonce-replay")
+        self.assertEqual(second["audit"]["caller_identity"], "staging-evidence-client")
+        self.assertEqual(second["audit"]["operation"], "collect_staging_frontend_evidence")
+        self.assertEqual(second["audit"]["target"]["workload"], "frontend")
+        self.assertEqual(second["audit"]["time_range"], {"start": iso(-20), "end": iso(0)})
+        self.assertEqual(second["audit"]["request_fingerprint"], first["request_fingerprint"])
 
     def test_malformed_request_does_not_consume_nonce(self) -> None:
         policy = EvidencePolicy()
@@ -387,6 +456,32 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
         self.assertEqual(response["outcome"], "denied")
         self.assertEqual(response["error"]["code"], "out_of_scope")
 
+    def test_out_of_scope_pod_status_fails_closed(self) -> None:
+        providers = fake_providers()
+        providers.kubernetes.pod_status[0]["workload"] = "cart"
+        response = gateway(providers).collect(base_request("nonce-pod-scope"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "out_of_scope")
+
+    def test_malformed_pod_status_fails_closed(self) -> None:
+        providers = fake_providers()
+        providers.kubernetes.pod_status[0]["ready"] = "true"
+        response = gateway(providers).collect(base_request("nonce-pod-malformed"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "malformed_provider_data")
+
+    def test_oversized_pod_status_fails_closed(self) -> None:
+        providers = fake_providers()
+        providers.kubernetes.pod_status = [
+            copy.deepcopy(providers.kubernetes.pod_status[0]) for _ in range(EvidenceLimits().max_pods + 1)
+        ]
+        response = gateway(providers).collect(base_request("nonce-pod-oversized"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "oversized_result")
+
     def test_provider_broad_event_fails_closed(self) -> None:
         providers = fake_providers()
         providers.kubernetes.events[0]["involved_name"] = "cart"
@@ -408,6 +503,14 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
         providers = fake_providers()
         providers.kubernetes.events[0]["timestamp"] = iso(-21)
         response = gateway(providers).collect(base_request("nonce-old-event"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "outside_time_range")
+
+    def test_subsecond_event_timestamp_outside_window_fails_closed(self) -> None:
+        providers = fake_providers()
+        providers.kubernetes.events[0]["timestamp"] = "2026-09-19T16:00:00.500000Z"
+        response = gateway(providers).collect(base_request("nonce-subsecond-event"), now=NOW)
 
         self.assertEqual(response["outcome"], "denied")
         self.assertEqual(response["error"]["code"], "outside_time_range")
@@ -538,10 +641,16 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
 
     def test_provider_unavailable_is_safe_backend_unavailable(self) -> None:
         class UnavailablePrometheusProvider(FakePrometheusProvider):
-            def query_template(self, template_id, *, target, start, end):
+            def query_template(self, template_id, *, target, start, end, max_values):
                 self.calls.increment(
                     f"prometheus.query_template.{template_id}",
-                    {"template_id": template_id, "target": target, "start": start, "end": end},
+                    {
+                        "template_id": template_id,
+                        "target": target,
+                        "start": start,
+                        "end": end,
+                        "max_values": max_values,
+                    },
                 )
                 raise ProviderError("secret backend detail")
 
@@ -602,6 +711,51 @@ class EvidenceGatewayB1Tests(unittest.TestCase):
         self.assertEqual(second["outcome"], "denied")
         self.assertEqual(second["error"]["code"], "replay_capacity_exceeded")
         self.assertEqual(second["audit"]["provider_calls"], {})
+
+    def test_rate_limit_denial_is_auditable_and_expires(self) -> None:
+        limits = EvidenceLimits(max_requests_per_minute=1)
+        policy = EvidencePolicy(limits=limits, rate_limit_guard=RateLimitGuard())
+        providers = fake_providers()
+        first = gateway(providers, policy).collect(base_request("nonce-rate-first"), now=NOW)
+        before = providers.total_calls()
+
+        denied = gateway(providers, policy).collect(base_request("nonce-rate-denied"), now=NOW)
+
+        self.assertEqual(first["outcome"], "allowed")
+        self.assertEqual(denied["outcome"], "denied")
+        self.assertEqual(denied["error"]["code"], "rate_limited")
+        self.assertEqual(providers.total_calls(), before)
+        self.assertEqual(denied["audit"]["provider_calls"], {})
+        self.assertEqual(denied["audit"]["provider_call_count"], 0)
+        self.assertEqual(denied["audit"]["denial_reason"], "rate_limited")
+        self.assertEqual(denied["audit"]["request_id"], "req-nonce-rate-denied")
+        self.assertEqual(denied["audit"]["caller_identity"], "staging-evidence-client")
+        self.assertEqual(denied["audit"]["operation"], "collect_staging_frontend_evidence")
+        self.assertEqual(denied["audit"]["target"]["namespace"], "online-shop-stage")
+        self.assertEqual(denied["audit"]["time_range"], {"start": iso(-20), "end": iso(0)})
+        self.assertIn("request_fingerprint", denied["audit"])
+
+        after_window = base_request("nonce-rate-after-window")
+        after_window["auth"]["issued_at"] = iso(1)
+        after_window["auth"]["expires_at"] = iso(7)
+        allowed = gateway(providers, policy).collect(after_window, now=NOW + timedelta(minutes=2))
+
+        self.assertEqual(allowed["outcome"], "allowed")
+
+    def test_response_bytes_match_the_final_serialized_envelope(self) -> None:
+        response = gateway().collect(base_request("nonce-response-bytes"), now=NOW)
+
+        self.assertEqual(response["audit"]["response_bytes"], len(canonical_json(response).encode("utf-8")))
+
+    def test_max_result_bytes_applies_to_final_envelope(self) -> None:
+        baseline = gateway().collect(base_request("nonce-size-limited"), now=NOW)
+        max_result_bytes = len(canonical_json(baseline).encode("utf-8")) - 1
+        policy = EvidencePolicy(limits=EvidenceLimits(max_result_bytes=max_result_bytes))
+        response = gateway(fake_providers(), policy).collect(base_request("nonce-size-limited"), now=NOW)
+
+        self.assertEqual(response["outcome"], "denied")
+        self.assertEqual(response["error"]["code"], "oversized_result")
+        self.assertEqual(response["audit"]["response_bytes"], len(canonical_json(response).encode("utf-8")))
 
 
 if __name__ == "__main__":

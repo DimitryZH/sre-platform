@@ -41,6 +41,8 @@ APPROVED_EVENT_OBJECTS = frozenset(
         ("Ingress", "online-shop-frontend"),
     }
 )
+APPROVED_POD_PHASES = frozenset({"Pending", "Running", "Succeeded", "Failed", "Unknown"})
+APPROVED_CONTAINER_STATES = frozenset({"Waiting", "Running", "Terminated"})
 
 
 class EvidenceGateway:
@@ -53,14 +55,15 @@ class EvidenceGateway:
         approved_request: dict[str, Any] | None = None
         request_fingerprint: str | None = None
         try:
-            approved_request = self.policy.validate_request(request, now=now)
+            approved_request = self.policy.validate_request_context(request, now=now)
             request_fingerprint = sha256_hex(
                 {
                     key: value
                     for key, value in approved_request.items()
-                    if key not in {"request_id", "caller_identity"}
+                    if key not in {"request_id", "caller_identity"} and not key.startswith("_")
                 }
             )
+            self.policy.enforce_request_guards(approved_request, now=now)
             result = self._collect_approved(approved_request)
             result_digest = sha256_hex(result)
             source_revision = result.get("source_revision")
@@ -95,11 +98,7 @@ class EvidenceGateway:
                 result_bytes=result_bytes,
                 revision=source_revision,
             )
-            response_bytes = len(canonical_json(envelope).encode("utf-8"))
-            if response_bytes > self.policy.limits.max_result_bytes:
-                raise EvidenceError("oversized_result", "serialized evidence response exceeds byte limit")
-            envelope["audit"]["response_bytes"] = response_bytes
-            return envelope
+            return self._finalize_response(envelope, enforce_max_result_bytes=True)
         except ProviderError:
             return self._denied(
                 call_mark,
@@ -133,12 +132,29 @@ class EvidenceGateway:
             denial_reason=code,
             request_fingerprint=request_fingerprint,
         )
-        return {
-            "schema_version": SCHEMA_VERSION,
-            "outcome": "denied",
-            "error": {"code": code, "message": message},
-            "audit": audit,
-        }
+        return self._finalize_response(
+            {
+                "schema_version": SCHEMA_VERSION,
+                "outcome": "denied",
+                "error": {"code": code, "message": message},
+                "audit": audit,
+            }
+        )
+
+    def _finalize_response(
+        self, envelope: dict[str, Any], *, enforce_max_result_bytes: bool = False
+    ) -> dict[str, Any]:
+        audit = envelope["audit"]
+        response_bytes = 0
+        for _ in range(16):
+            audit["response_bytes"] = response_bytes
+            actual_bytes = len(canonical_json(envelope).encode("utf-8"))
+            if actual_bytes == response_bytes:
+                if enforce_max_result_bytes and actual_bytes > self.policy.limits.max_result_bytes:
+                    raise EvidenceError("oversized_result", "serialized evidence response exceeds byte limit")
+                return envelope
+            response_bytes = actual_bytes
+        raise EvidenceError("malformed_provider_data", "response size calculation did not converge")
 
     def _audit(
         self,
@@ -193,6 +209,8 @@ class EvidenceGateway:
         deployment_revision = None
         if "kubernetes_state" in kinds:
             sections.append(self._kubernetes_state_section(context))
+        if "kubernetes_pod_status" in kinds:
+            sections.append(self._kubernetes_pod_status_section(context))
         if "kubernetes_events" in kinds:
             sections.append(self._kubernetes_events_section(context))
         if "logs" in kinds:
@@ -225,6 +243,7 @@ class EvidenceGateway:
             "end": end,
             "start_text": approved_request["time_range"]["start"],
             "end_text": approved_request["time_range"]["end"],
+            "pod_selector": self.policy.target.pod_label_selector,
         }
 
     def _kubernetes_state_section(self, context: dict[str, Any]) -> dict[str, Any]:
@@ -246,6 +265,7 @@ class EvidenceGateway:
                 target=context["target"],
                 start=context["start_text"],
                 end=context["end_text"],
+                max_items=self.policy.limits.max_events,
             ),
             "events",
         )
@@ -257,6 +277,20 @@ class EvidenceGateway:
         ]
         return {"kind": "kubernetes_events", "data": {"events": events}}
 
+    def _kubernetes_pod_status_section(self, context: dict[str, Any]) -> dict[str, Any]:
+        raw_pods = _expect_sequence(
+            self.providers.kubernetes.get_frontend_pod_status(
+                target=context["target"],
+                selector=context["pod_selector"],
+                max_pods=self.policy.limits.max_pods,
+            ),
+            "pod status",
+        )
+        if len(raw_pods) > self.policy.limits.max_pods:
+            raise EvidenceError("oversized_result", "pod status count exceeds limit")
+        pods = [self._project_pod_status(_expect_mapping(item, "pod status")) for item in raw_pods]
+        return {"kind": "kubernetes_pod_status", "data": {"pods": pods, "pod_count": len(pods)}}
+
     def _logs_section(self, context: dict[str, Any]) -> dict[str, Any]:
         projected = []
         total_bytes = 0
@@ -266,6 +300,9 @@ class EvidenceGateway:
                 start=context["start_text"],
                 end=context["end_text"],
                 container=self.policy.target.workload,
+                max_lines=self.policy.limits.max_log_lines,
+                max_bytes=self.policy.limits.max_log_bytes,
+                max_line_length=self.policy.limits.max_log_line_length,
             ),
             "log lines",
         )
@@ -288,6 +325,7 @@ class EvidenceGateway:
                     target=context["target"],
                     start=context["start_text"],
                     end=context["end_text"],
+                    max_values=self.policy.limits.max_prometheus_values,
                 ),
                 "prometheus values",
             )
@@ -395,6 +433,25 @@ class EvidenceGateway:
             "paths": list(paths),
         }
 
+    def _project_pod_status(self, raw: dict[str, Any]) -> dict[str, Any]:
+        if raw.get("namespace") != self.policy.target.namespace:
+            raise EvidenceError("out_of_scope", "pod status is outside approved namespace")
+        if raw.get("workload") != self.policy.target.workload or raw.get("container") != self.policy.target.workload:
+            raise EvidenceError("out_of_scope", "pod status is outside approved frontend workload")
+        phase = raw.get("phase")
+        container_state = raw.get("container_state")
+        if not isinstance(phase, str) or phase not in APPROVED_POD_PHASES:
+            raise EvidenceError("malformed_provider_data", "pod phase is malformed")
+        if not isinstance(container_state, str) or container_state not in APPROVED_CONTAINER_STATES:
+            raise EvidenceError("malformed_provider_data", "container state is malformed")
+        return {
+            "pod_id": sanitize_string(raw.get("pod_id"), max_length=128),
+            "phase": phase,
+            "ready": _safe_bool(raw.get("ready")),
+            "restart_count": _safe_int(raw.get("restart_count")),
+            "container_state": container_state,
+        }
+
     def _project_event(self, raw: dict[str, Any], start: datetime, end: datetime) -> dict[str, Any]:
         if raw.get("namespace") != self.policy.target.namespace:
             raise EvidenceError("out_of_scope", "event is outside approved namespace")
@@ -486,6 +543,12 @@ def _safe_int(value: Any) -> int:
     return value
 
 
+def _safe_bool(value: Any) -> bool:
+    if not isinstance(value, bool):
+        raise EvidenceError("malformed_provider_data", "boolean provider value is malformed")
+    return value
+
+
 def _safe_float(value: Any) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise EvidenceError("malformed_provider_data", "numeric provider value is malformed")
@@ -506,14 +569,14 @@ def _safe_timestamp(value: Any, *, start: datetime, end: datetime) -> str:
         raise EvidenceError("malformed_provider_data", "timestamp provider value is malformed") from exc
     if parsed.tzinfo is None:
         raise EvidenceError("malformed_provider_data", "timestamp provider value must include timezone")
-    timestamp = parsed.astimezone(UTC).replace(microsecond=0)
+    timestamp = parsed.astimezone(UTC)
     if timestamp < start or timestamp > end:
         raise EvidenceError("outside_time_range", "provider evidence timestamp is outside the approved time range")
-    return timestamp.isoformat().replace("+00:00", "Z")
+    return timestamp.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _parse_approved_time(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC).replace(microsecond=0)
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
 
 
 def _expect_mapping(value: Any, label: str) -> dict[str, Any]:
@@ -535,6 +598,8 @@ def _count_result(result: dict[str, Any]) -> dict[str, int]:
         data = section.get("data", {})
         if kind == "kubernetes_events":
             counts["events"] = len(data.get("events", []))
+        elif kind == "kubernetes_pod_status":
+            counts["pods"] = len(data.get("pods", []))
         elif kind == "logs":
             counts["log_lines"] = len(data.get("lines", []))
         elif kind == "prometheus":

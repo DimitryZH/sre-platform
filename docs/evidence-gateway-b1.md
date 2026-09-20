@@ -33,13 +33,18 @@ All providers in B1 are fake in-memory providers. They are used only to prove
 contract shape, projection, sanitization, limits, fail-closed behavior, and
 zero provider calls for policy rejections. Provider parameters are built only
 from the validated server-approved request and include the approved target plus
-the approved start/end time range where applicable.
+the approved start/end time range where applicable. The future B2 adapter
+contract receives server-owned limits before every backend call: Events receive
+their maximum item count; logs receive maximum lines, bytes, and line length;
+Prometheus receives maximum values per template; and pod status receives the
+fixed frontend selector and maximum pod count.
 
 ## Allowed Evidence
 
 Allowed evidence kinds are:
 
 - `kubernetes_state`
+- `kubernetes_pod_status`
 - `kubernetes_events`
 - `logs`
 - `prometheus`
@@ -85,6 +90,13 @@ AnalysisRuns are returned only when ownership is deterministically proven by
 Events, log lines, and Prometheus samples must fall inside the approved
 request time range.
 
+Pod status uses a separate typed frontend provider call with the fixed
+`app.kubernetes.io/name=frontend` selector. Its safe projection is limited to
+logical pod identifier, phase, ready state, restart count, and frontend
+container state. UID, node name, pod or host IP, image ID, labels,
+annotations, and raw pod objects are never returned. Out-of-scope, malformed,
+or excessive pod data fails closed.
+
 ## Limits
 
 The B1 core enforces conservative offline limits:
@@ -102,6 +114,7 @@ The B1 core enforces conservative offline limits:
 - Rollout AnalysisRuns: 8
 - Events: 16
 - Prometheus values per template: 16
+- frontend pod status items: 10
 - replay entries: 128, expiry-aware and fail-closed at capacity
 - offline per-subject rate policy: 60 requests per minute, in memory only
 
@@ -152,6 +165,13 @@ time range, decision or denial reason, request fingerprint, evidence ID/result
 digest where available, revision where applicable, counts, and byte totals. A
 future deployment-facing envelope may remove or further restrict that
 diagnostic detail if needed.
+
+Replay and offline rate-policy denials retain that safe context only after the
+request has completed schema, authentication, target, and time-range
+validation; malformed or unauthorized requests do not gain caller-attributed
+audit fields. `audit.response_bytes` is the byte length of the final canonical
+response envelope, including that field itself, and the allowed response limit
+is enforced against the same final envelope.
 
 ## Non-Claims
 

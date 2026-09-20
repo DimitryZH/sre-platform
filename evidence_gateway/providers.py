@@ -45,6 +45,7 @@ class FakeKubernetesProvider:
     workload_state: dict[str, Any] = field(default_factory=dict)
     rollout_state: dict[str, Any] = field(default_factory=dict)
     ingress_state: dict[str, Any] = field(default_factory=dict)
+    pod_status: list[dict[str, Any]] = field(default_factory=list)
     events: list[dict[str, Any]] = field(default_factory=list)
     calls: ProviderCalls = field(default_factory=ProviderCalls)
 
@@ -56,8 +57,22 @@ class FakeKubernetesProvider:
             "ingress": deepcopy(self.ingress_state),
         }
 
-    def get_frontend_events(self, *, target: dict[str, Any], start: str, end: str) -> list[dict[str, Any]]:
-        self.calls.increment("kubernetes.get_frontend_events", {"target": target, "start": start, "end": end})
+    def get_frontend_pod_status(
+        self, *, target: dict[str, Any], selector: dict[str, str], max_pods: int
+    ) -> list[dict[str, Any]]:
+        self.calls.increment(
+            "kubernetes.get_frontend_pod_status",
+            {"target": target, "selector": selector, "max_pods": max_pods},
+        )
+        return deepcopy(self.pod_status)
+
+    def get_frontend_events(
+        self, *, target: dict[str, Any], start: str, end: str, max_items: int
+    ) -> list[dict[str, Any]]:
+        self.calls.increment(
+            "kubernetes.get_frontend_events",
+            {"target": target, "start": start, "end": end, "max_items": max_items},
+        )
         return deepcopy(self.events)
 
 
@@ -66,10 +81,18 @@ class FakePrometheusProvider:
     values_by_template: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     calls: ProviderCalls = field(default_factory=ProviderCalls)
 
-    def query_template(self, template_id: str, *, target: dict[str, Any], start: str, end: str) -> list[dict[str, Any]]:
+    def query_template(
+        self, template_id: str, *, target: dict[str, Any], start: str, end: str, max_values: int
+    ) -> list[dict[str, Any]]:
         self.calls.increment(
             f"prometheus.query_template.{template_id}",
-            {"template_id": template_id, "target": target, "start": start, "end": end},
+            {
+                "template_id": template_id,
+                "target": target,
+                "start": start,
+                "end": end,
+                "max_values": max_values,
+            },
         )
         return deepcopy(self.values_by_template.get(template_id, []))
 
@@ -79,10 +102,28 @@ class FakeLogsProvider:
     lines: list[dict[str, Any]] = field(default_factory=list)
     calls: ProviderCalls = field(default_factory=ProviderCalls)
 
-    def get_frontend_container_logs(self, *, target: dict[str, Any], start: str, end: str, container: str) -> list[dict[str, Any]]:
+    def get_frontend_container_logs(
+        self,
+        *,
+        target: dict[str, Any],
+        start: str,
+        end: str,
+        container: str,
+        max_lines: int,
+        max_bytes: int,
+        max_line_length: int,
+    ) -> list[dict[str, Any]]:
         self.calls.increment(
             "logs.get_frontend_container_logs",
-            {"target": target, "start": start, "end": end, "container": container},
+            {
+                "target": target,
+                "start": start,
+                "end": end,
+                "container": container,
+                "max_lines": max_lines,
+                "max_bytes": max_bytes,
+                "max_line_length": max_line_length,
+            },
         )
         return deepcopy(self.lines)
 

@@ -24,6 +24,7 @@ MAX_AUTH_LIFETIME = timedelta(minutes=10)
 EVIDENCE_KINDS = frozenset(
     {
         "kubernetes_state",
+        "kubernetes_pod_status",
         "kubernetes_events",
         "logs",
         "prometheus",
@@ -55,6 +56,7 @@ MAX_CONDITIONS = 8
 MAX_ANALYSIS_RUNS = 8
 MAX_EVENTS = 16
 MAX_PROMETHEUS_VALUES = 16
+MAX_PODS = 10
 MAX_REPLAY_ENTRIES = 128
 MAX_RATE_LIMIT_ENTRIES = 128
 MAX_REQUESTS_PER_MINUTE = 60
@@ -96,6 +98,7 @@ class EvidenceLimits:
     max_analysis_runs: int = MAX_ANALYSIS_RUNS
     max_events: int = MAX_EVENTS
     max_prometheus_values: int = MAX_PROMETHEUS_VALUES
+    max_pods: int = MAX_PODS
     max_replay_entries: int = MAX_REPLAY_ENTRIES
     max_rate_limit_entries: int = MAX_RATE_LIMIT_ENTRIES
     max_requests_per_minute: int = MAX_REQUESTS_PER_MINUTE
@@ -141,12 +144,14 @@ class TargetPolicy:
 class ReplayGuard:
     seen_nonces: dict[str, datetime] = field(default_factory=dict)
 
-    def accept_once(self, nonce: str, *, expires_at: datetime, now: datetime, capacity: int) -> None:
+    def check_available(self, nonce: str, *, now: datetime, capacity: int) -> None:
         self._purge(now)
         if nonce in self.seen_nonces:
             raise EvidenceError("replay_rejected", "request nonce was already used")
         if len(self.seen_nonces) >= capacity:
             raise EvidenceError("replay_capacity_exceeded", "replay protection state is at capacity")
+
+    def record(self, nonce: str, *, expires_at: datetime) -> None:
         self.seen_nonces[nonce] = expires_at
 
     def _purge(self, now: datetime) -> None:
@@ -159,7 +164,7 @@ class ReplayGuard:
 class RateLimitGuard:
     attempts_by_subject: dict[str, list[datetime]] = field(default_factory=dict)
 
-    def accept(self, subject: str, *, now: datetime, capacity: int, max_per_minute: int) -> None:
+    def check_available(self, subject: str, *, now: datetime, capacity: int, max_per_minute: int) -> None:
         cutoff = now - timedelta(minutes=1)
         active_subjects = {
             item_subject: [timestamp for timestamp in timestamps if timestamp > cutoff]
@@ -173,7 +178,9 @@ class RateLimitGuard:
         timestamps = self.attempts_by_subject.setdefault(subject, [])
         if len(timestamps) >= max_per_minute:
             raise EvidenceError("rate_limited", "caller exceeded the offline request rate policy")
-        timestamps.append(now)
+
+    def record(self, subject: str, *, now: datetime) -> None:
+        self.attempts_by_subject.setdefault(subject, []).append(now)
 
 
 @dataclass
@@ -186,7 +193,7 @@ class EvidencePolicy:
     replay_guard: ReplayGuard = field(default_factory=ReplayGuard)
     rate_limit_guard: RateLimitGuard = field(default_factory=RateLimitGuard)
 
-    def validate_request(self, request: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+    def validate_request_context(self, request: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
         current_time = now or datetime.now(UTC)
         if not isinstance(request, dict):
             raise EvidenceError("malformed_request", "request must be a JSON object")
@@ -207,19 +214,6 @@ class EvidencePolicy:
         auth = self._validate_auth(request.get("auth"), now=current_time)
         start, end = self._validate_time_range(request.get("time_range"), now=current_time)
         kinds = self._validate_evidence_kinds(request.get("evidence_kinds"))
-        self.rate_limit_guard.accept(
-            auth["subject"],
-            now=current_time,
-            capacity=self.limits.max_rate_limit_entries,
-            max_per_minute=self.limits.max_requests_per_minute,
-        )
-        self.replay_guard.accept_once(
-            auth["nonce"],
-            expires_at=auth["expires_at"],
-            now=current_time,
-            capacity=self.limits.max_replay_entries,
-        )
-
         return {
             "schema_version": SCHEMA_VERSION,
             "operation": OPERATION_COLLECT,
@@ -231,7 +225,33 @@ class EvidencePolicy:
             "limits": self.limits.__dict__,
             "prometheus_template_ids": sorted(PROMETHEUS_TEMPLATE_IDS),
             "gitops_path_ids": sorted(GITOPS_PATH_IDS),
+            "_replay_nonce": auth["nonce"],
+            "_auth_expires_at": auth["expires_at"],
         }
+
+    def enforce_request_guards(self, approved_request: dict[str, Any], *, now: datetime | None = None) -> None:
+        current_time = now or datetime.now(UTC)
+        subject = approved_request["caller_identity"]
+        nonce = approved_request["_replay_nonce"]
+        expires_at = approved_request["_auth_expires_at"]
+        self.replay_guard.check_available(
+            nonce,
+            now=current_time,
+            capacity=self.limits.max_replay_entries,
+        )
+        self.rate_limit_guard.check_available(
+            subject,
+            now=current_time,
+            capacity=self.limits.max_rate_limit_entries,
+            max_per_minute=self.limits.max_requests_per_minute,
+        )
+        self.rate_limit_guard.record(subject, now=current_time)
+        self.replay_guard.record(nonce, expires_at=expires_at)
+
+    def validate_request(self, request: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+        approved_request = self.validate_request_context(request, now=now)
+        self.enforce_request_guards(approved_request, now=now)
+        return approved_request
 
     def _validate_request_id(self, value: Any) -> str:
         if not isinstance(value, str) or not SAFE_ID_RE.fullmatch(value):
@@ -306,7 +326,7 @@ def _parse_time(value: Any, field_name: str) -> datetime:
 
 
 def _format_time(value: datetime) -> str:
-    return value.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _looks_like_mutation(value: str) -> bool:

@@ -51,8 +51,10 @@ only narrow backend operations:
   involved-object pairs while consuming one bounded total.
 - Container logs use the fixed namespace, workload, and frontend container with
   server-owned time, line, byte, and line-length limits.
-- Prometheus accepts template IDs only and maps them to fixed recording-rule
-  expressions with no fabricated label matchers; it has no raw query method.
+- Prometheus accepts template IDs only and has no raw query method. The current
+  B2 adapter marks both available recording-rule templates unavailable before
+  transport because their aggregated output cannot distinguish the approved
+  staging target.
 - Deployment revision resolves the exact Argo CD Application and requires an
   immutable commit SHA. GitOps files use allowlisted path IDs only and can be
   read only at that resolved SHA with a server-owned byte limit.
@@ -68,10 +70,10 @@ responses. A Rollout record contains its identity, replica counts, conditions,
 phase, current step, stable/canary services, and Rollout-owned AnalysisRuns;
 the adapter derives the two Kubernetes state inputs from it. Pod, Event, and
 log records use the bounded fields listed in their evidence sections below.
-Prometheus returns timestamp/value samples with an optional label map; the
-aggregated recording rules may return an empty label map. Argo CD returns the
-requested Application identity and sync/health status. GitOps returns only the
-content of the adapter-selected allowlisted path at the adapter-verified SHA.
+Argo CD returns the requested Application identity and sync/health status.
+GitOps returns only the content of the adapter-selected allowlisted path at the
+adapter-verified SHA. The current B2 Prometheus adapter makes no backend query:
+the available aggregated recording-rule output is not target-distinguishable.
 
 ## Allowed Evidence
 
@@ -89,6 +91,10 @@ Allowed Prometheus template IDs are:
 
 - `slo_error_ratio_5m` -> `slo:error_ratio_5m`
 - `slo_burn_rate_5m` -> `slo:burn_rate_5m`
+
+The B1 fake provider continues to cover this abstract bounded template
+contract. The current B2 adapter rejects both templates before calling its
+backend because the recording-rule output is not target-distinguishable.
 
 The namespace-only ingress request-rate query is intentionally not included in
 B1 because the current contract does not prove an exact frontend/ingress

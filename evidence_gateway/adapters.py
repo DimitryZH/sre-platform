@@ -40,6 +40,10 @@ PROMETHEUS_RECORDING_RULES = {
     "slo_error_ratio_5m": "slo:error_ratio_5m",
     "slo_burn_rate_5m": "slo:burn_rate_5m",
 }
+# These aggregate recording rules do not retain a target-distinguishing label.
+# The staging Prometheus rule selector also loads rules from more than one
+# namespace, so the B2 adapter cannot make a target-bound query for them.
+UNAVAILABLE_PROMETHEUS_TEMPLATE_IDS = frozenset(PROMETHEUS_RECORDING_RULES)
 GITOPS_PATHS = {
     "stage_argocd_application": "environments/stage/argocd/apps/online-shop-stage.yaml",
     "stage_values": "environments/stage/values/platform.yaml",
@@ -305,34 +309,9 @@ class PrometheusEvidenceAdapter:
         if expression is None:
             raise ProviderError("prometheus template is not approved")
         _require_limit(max_values, self.bounds.max_prometheus_values, "prometheus value limit")
-        labels: dict[str, str] = {}
-        self.calls.increment(
-            f"prometheus.query_template.{template_id}",
-            {
-                "template_id": template_id,
-                "target": target,
-                "start": start,
-                "end": end,
-                "max_values": max_values,
-            },
-        )
-        try:
-            values = _require_list(
-                self.backend.query_recording_rule(
-                    expression=expression,
-                    labels=labels,
-                    start=start,
-                    end=end,
-                    max_values=max_values,
-                )
-            )
-        except ProviderError:
-            raise
-        except Exception as exc:
-            raise ProviderError("prometheus backend failed") from exc
-        if len(values) > max_values:
-            raise ProviderError("prometheus backend exceeded value limit")
-        return deepcopy(values)
+        if template_id in UNAVAILABLE_PROMETHEUS_TEMPLATE_IDS:
+            raise ProviderError("prometheus template cannot prove the approved target")
+        raise ProviderError("prometheus template is not approved")
 
 
 @dataclass

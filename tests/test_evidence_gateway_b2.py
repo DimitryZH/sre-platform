@@ -14,7 +14,7 @@ from evidence_gateway import (
     KubernetesEvidenceAdapter,
     PrometheusEvidenceAdapter,
 )
-from evidence_gateway.adapters import FRONTEND_SELECTOR, GITOPS_PATHS, PROMETHEUS_RECORDING_RULES, FrontendLogsAdapter
+from evidence_gateway.adapters import FRONTEND_SELECTOR, GITOPS_PATHS, FrontendLogsAdapter
 from evidence_gateway.policy import SCHEMA_VERSION, TargetPolicy
 from evidence_gateway.providers import EvidenceProviders, ProviderError
 
@@ -26,7 +26,7 @@ REVISION = "b" * 40
 TARGET = TargetPolicy().to_public_dict()
 
 
-def all_evidence_request(nonce: str = "nonce-b2-all") -> dict[str, Any]:
+def supportable_evidence_request(nonce: str = "nonce-b2-supportable") -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "operation": "collect_staging_frontend_evidence",
@@ -45,7 +45,6 @@ def all_evidence_request(nonce: str = "nonce-b2-all") -> dict[str, Any]:
             "kubernetes_pod_status",
             "kubernetes_events",
             "logs",
-            "prometheus",
             "deployment_revision",
             "gitops",
         ],
@@ -204,7 +203,7 @@ class EvidenceGatewayB2Tests(unittest.TestCase):
         self.assertEqual(backend.calls[1]["limit"], 1)
         self.assertEqual(len(backend.calls), 2)
 
-    def test_logs_and_prometheus_use_server_owned_templates_and_limits(self) -> None:
+    def test_logs_use_server_owned_limits_and_prometheus_fails_before_transport(self) -> None:
         logs_backend = RecordingLogsBackend()
         logs = FrontendLogsAdapter(logs_backend)
         prom_backend = RecordingPrometheusBackend()
@@ -219,7 +218,8 @@ class EvidenceGatewayB2Tests(unittest.TestCase):
             max_bytes=8192,
             max_line_length=240,
         )
-        prometheus.query_template("slo_error_ratio_5m", target=TARGET, start=START, end=END, max_values=16)
+        with self.assertRaises(ProviderError):
+            prometheus.query_template("slo_error_ratio_5m", target=TARGET, start=START, end=END, max_values=16)
 
         self.assertEqual(
             logs_backend.calls,
@@ -236,18 +236,7 @@ class EvidenceGatewayB2Tests(unittest.TestCase):
                 }
             ],
         )
-        self.assertEqual(
-            prom_backend.calls,
-            [
-                {
-                    "expression": PROMETHEUS_RECORDING_RULES["slo_error_ratio_5m"],
-                    "labels": {},
-                    "start": START,
-                    "end": END,
-                    "max_values": 16,
-                }
-            ],
-        )
+        self.assertEqual(prom_backend.calls, [])
 
     def test_gitops_adapter_binds_allowlisted_path_to_resolved_immutable_revision(self) -> None:
         argocd = RecordingArgoCDBackend()
@@ -329,24 +318,16 @@ class EvidenceGatewayB2Tests(unittest.TestCase):
         self.assertEqual(argocd.calls, [])
         self.assertEqual(gitops_backend.calls, [])
 
-    def test_backend_limit_violation_and_error_map_to_provider_error(self) -> None:
+    def test_backend_limit_violation_maps_to_provider_error(self) -> None:
         kubernetes_backend = RecordingKubernetesBackend()
         kubernetes_backend.pods = [{"pod": item} for item in range(11)]
         kubernetes = KubernetesEvidenceAdapter(kubernetes_backend)
-        prometheus_backend = RecordingPrometheusBackend()
-        prometheus_backend.error = RuntimeError("token=backend-secret")
-        prometheus = PrometheusEvidenceAdapter(prometheus_backend)
 
         with self.assertRaises(ProviderError):
             kubernetes.get_frontend_pod_status(target=TARGET, selector=FRONTEND_SELECTOR, max_pods=10)
-        with self.assertRaises(ProviderError) as error:
-            prometheus.query_template("slo_error_ratio_5m", target=TARGET, start=START, end=END, max_values=16)
 
-        self.assertNotIn("backend-secret", str(error.exception))
-
-    def test_gateway_maps_adapter_backend_failure_to_safe_response(self) -> None:
+    def test_gateway_maps_unavailable_prometheus_to_safe_response_without_transport_call(self) -> None:
         prom_backend = RecordingPrometheusBackend()
-        prom_backend.error = RuntimeError("password=do-not-leak")
         providers = EvidenceProviders(
             kubernetes=FakeKubernetesProvider(),
             prometheus=PrometheusEvidenceAdapter(prom_backend),
@@ -373,10 +354,10 @@ class EvidenceGatewayB2Tests(unittest.TestCase):
 
         self.assertEqual(response["outcome"], "denied")
         self.assertEqual(response["error"]["code"], "backend_unavailable")
-        self.assertNotIn("do-not-leak", str(response))
-        self.assertEqual(response["audit"]["provider_calls"], {"prometheus.query_template.slo_burn_rate_5m": 1})
+        self.assertEqual(response["audit"]["provider_calls"], {})
+        self.assertEqual(prom_backend.calls, [])
 
-    def test_gateway_collects_complete_evidence_from_all_offline_adapters(self) -> None:
+    def test_gateway_collects_complete_evidence_from_supportable_offline_adapters(self) -> None:
         kubernetes_backend = RecordingKubernetesBackend()
         kubernetes_backend.pods = [
             {
@@ -414,7 +395,6 @@ class EvidenceGatewayB2Tests(unittest.TestCase):
             }
         ]
         prometheus_backend = RecordingPrometheusBackend()
-        prometheus_backend.values = [{"timestamp": "2026-09-20T15:50:00Z", "value": 0.01, "labels": {}}]
         argocd_backend = RecordingArgoCDBackend()
         gitops_backend = RecordingGitOpsBackend()
         providers = EvidenceProviders(
@@ -424,17 +404,17 @@ class EvidenceGatewayB2Tests(unittest.TestCase):
             gitops=ArgoCDGitOpsAdapter(argocd_backend, gitops_backend),
         )
 
-        response = EvidenceGateway(EvidencePolicy(), providers).collect(all_evidence_request(), now=NOW)
+        response = EvidenceGateway(EvidencePolicy(), providers).collect(supportable_evidence_request(), now=NOW)
 
         self.assertEqual(response["outcome"], "allowed")
         self.assertRegex(response["request_fingerprint"], r"^[a-f0-9]{64}$")
         self.assertRegex(response["evidence_id"], r"^[a-f0-9]{64}$")
         self.assertEqual(response["result"]["source_revision"], REVISION)
         self.assertEqual(response["audit"]["revision"], REVISION)
-        self.assertEqual(response["result"]["section_count"], 7)
+        self.assertEqual(response["result"]["section_count"], 6)
         self.assertNotIn("get_deployment", [call["operation"] for call in kubernetes_backend.calls])
         self.assertNotIn("must-not-appear", str(response))
-        self.assertEqual(prometheus_backend.calls[0]["labels"], {})
+        self.assertEqual(prometheus_backend.calls, [])
         self.assertIn("kubernetes.get_frontend_state", response["audit"]["provider_calls"])
         self.assertIn("gitops.read_file_at_revision.stage_values", response["audit"]["provider_calls"])
 

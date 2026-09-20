@@ -37,7 +37,6 @@ APPROVED_INGRESS_PATHS = frozenset({"/stage"})
 APPROVED_EVENT_OBJECTS = frozenset(
     {
         ("Rollout", "frontend"),
-        ("Deployment", "frontend"),
         ("Ingress", "online-shop-frontend"),
     }
 )

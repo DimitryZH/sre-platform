@@ -44,13 +44,15 @@ local contract tests. They create no clients, read no credentials, and perform
 no network I/O. The adapters retain the B1 provider method signatures and call
 only narrow backend operations:
 
-- Kubernetes state uses exact namespace/name reads for the frontend workload,
-  Rollout, and Ingress; pod status uses the fixed frontend selector and limit;
-  Events use exact involved-object pairs while consuming one bounded total.
+- Kubernetes state uses exact namespace/name reads for `Rollout/frontend` and
+  the Ingress. The adapter derives both workload and rollout evidence from the
+  normalized Rollout response; it does not request `Deployment/frontend`. Pod
+  status uses the fixed frontend selector and limit; Events use exact
+  involved-object pairs while consuming one bounded total.
 - Container logs use the fixed namespace, workload, and frontend container with
   server-owned time, line, byte, and line-length limits.
 - Prometheus accepts template IDs only and maps them to fixed recording-rule
-  expressions with fixed namespace/service labels; it has no raw query method.
+  expressions with no fabricated label matchers; it has no raw query method.
 - Deployment revision resolves the exact Argo CD Application and requires an
   immutable commit SHA. GitOps files use allowlisted path IDs only and can be
   read only at that resolved SHA with a server-owned byte limit.
@@ -58,6 +60,18 @@ only narrow backend operations:
 Malformed, broad, ambiguous, or over-limit adapter requests fail before a
 backend method is called. Backend exceptions and limit violations map to the
 existing deterministic unavailable-backend response through the Gateway.
+
+### Normalized Backend Inputs
+
+Transport backends return narrow normalized records, not arbitrary Gateway
+responses. A Rollout record contains its identity, replica counts, conditions,
+phase, current step, stable/canary services, and Rollout-owned AnalysisRuns;
+the adapter derives the two Kubernetes state inputs from it. Pod, Event, and
+log records use the bounded fields listed in their evidence sections below.
+Prometheus returns timestamp/value samples with an optional label map; the
+aggregated recording rules may return an empty label map. Argo CD returns the
+requested Application identity and sync/health status. GitOps returns only the
+content of the adapter-selected allowlisted path at the adapter-verified SHA.
 
 ## Allowed Evidence
 
@@ -102,7 +116,6 @@ part of the request schema.
 Kubernetes Events are limited to exact approved `(kind, name)` pairs:
 
 - `Rollout/frontend`
-- `Deployment/frontend`
 - `Ingress/online-shop-frontend`
 
 AnalysisRuns are returned only when ownership is deterministically proven by

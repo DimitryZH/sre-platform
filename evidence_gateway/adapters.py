@@ -10,14 +10,15 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, TypedDict
 
 from .policy import (
     APPROVED_ARGOCD_APPLICATION,
     APPROVED_INGRESS,
     APPROVED_NAMESPACE,
-    APPROVED_SERVICE,
     APPROVED_WORKLOAD,
+    MAX_ANALYSIS_RUNS,
+    MAX_CONDITIONS,
     MAX_EVENTS,
     MAX_GITOPS_FILE_BYTES,
     MAX_LOG_BYTES,
@@ -33,7 +34,6 @@ from .providers import ProviderCalls, ProviderError
 FRONTEND_SELECTOR = {"app.kubernetes.io/name": APPROVED_WORKLOAD}
 EVENT_OBJECTS = (
     ("Rollout", APPROVED_WORKLOAD),
-    ("Deployment", APPROVED_WORKLOAD),
     ("Ingress", APPROVED_INGRESS),
 )
 PROMETHEUS_RECORDING_RULES = {
@@ -52,10 +52,24 @@ GITOPS_PATHS = {
 APPROVED_TARGET = TargetPolicy().to_public_dict()
 
 
-class KubernetesBackend(Protocol):
-    def get_deployment(self, *, namespace: str, name: str) -> dict[str, Any]: ...
+class RolloutBackendRecord(TypedDict):
+    """Normalized narrow Rollout response used to derive B1 state evidence."""
 
-    def get_rollout(self, *, namespace: str, name: str) -> dict[str, Any]: ...
+    name: str
+    namespace: str
+    ready_replicas: int
+    desired_replicas: int
+    available_replicas: int
+    conditions: list[dict[str, Any]]
+    phase: str
+    current_step: int
+    stable_service: str
+    canary_service: str
+    analysis_runs: list[dict[str, Any]]
+
+
+class KubernetesBackend(Protocol):
+    def get_rollout(self, *, namespace: str, name: str) -> RolloutBackendRecord: ...
 
     def get_ingress(self, *, namespace: str, name: str) -> dict[str, Any]: ...
 
@@ -110,6 +124,8 @@ class GitOpsBackend(Protocol):
 
 @dataclass(frozen=True)
 class ProviderBounds:
+    max_conditions: int = MAX_CONDITIONS
+    max_analysis_runs: int = MAX_ANALYSIS_RUNS
     max_pods: int = MAX_PODS
     max_events: int = MAX_EVENTS
     max_log_lines: int = MAX_LOG_LINES
@@ -129,13 +145,12 @@ class KubernetesEvidenceAdapter:
         _require_target(target)
         self.calls.increment("kubernetes.get_frontend_state", {"target": target})
         try:
+            rollout = _require_rollout_record(
+                self.backend.get_rollout(namespace=APPROVED_NAMESPACE, name=APPROVED_WORKLOAD), self.bounds
+            )
             return {
-                "workload": _require_mapping(
-                    self.backend.get_deployment(namespace=APPROVED_NAMESPACE, name=APPROVED_WORKLOAD)
-                ),
-                "rollout": _require_mapping(
-                    self.backend.get_rollout(namespace=APPROVED_NAMESPACE, name=APPROVED_WORKLOAD)
-                ),
+                "workload": _workload_from_rollout(rollout),
+                "rollout": _rollout_from_record(rollout),
                 "ingress": _require_mapping(
                     self.backend.get_ingress(namespace=APPROVED_NAMESPACE, name=APPROVED_INGRESS)
                 ),
@@ -290,7 +305,7 @@ class PrometheusEvidenceAdapter:
         if expression is None:
             raise ProviderError("prometheus template is not approved")
         _require_limit(max_values, self.bounds.max_prometheus_values, "prometheus value limit")
-        labels = {"namespace": APPROVED_NAMESPACE, "service": APPROVED_SERVICE}
+        labels: dict[str, str] = {}
         self.calls.increment(
             f"prometheus.query_template.{template_id}",
             {
@@ -326,11 +341,13 @@ class ArgoCDGitOpsAdapter:
     gitops_backend: GitOpsBackend
     bounds: ProviderBounds = field(default_factory=ProviderBounds)
     calls: ProviderCalls = field(default_factory=ProviderCalls)
-    _resolved_revision: str | None = field(default=None, init=False, repr=False)
 
     def get_deployment_revision(self, *, target: dict[str, Any]) -> dict[str, Any]:
         _require_target(target)
         self.calls.increment("gitops.get_deployment_revision", {"target": target})
+        return self._resolve_deployment_revision()
+
+    def _resolve_deployment_revision(self) -> dict[str, Any]:
         try:
             application = _require_mapping(self.argocd_backend.get_application(name=APPROVED_ARGOCD_APPLICATION))
             metadata = _require_mapping(application.get("metadata"))
@@ -346,7 +363,6 @@ class ArgoCDGitOpsAdapter:
         revision = sync.get("revision")
         if not isinstance(revision, str) or not SHA_RE.fullmatch(revision):
             raise ProviderError("argocd revision is not immutable")
-        self._resolved_revision = revision
         return {
             "application": APPROVED_ARGOCD_APPLICATION,
             "revision": revision,
@@ -363,9 +379,10 @@ class ArgoCDGitOpsAdapter:
             raise ProviderError("gitops path is not approved")
         if not isinstance(revision, str) or not SHA_RE.fullmatch(revision):
             raise ProviderError("gitops revision is not immutable")
-        if revision != self._resolved_revision:
-            raise ProviderError("gitops revision is not the resolved deployment revision")
         _require_limit(max_bytes, self.bounds.max_gitops_file_bytes, "gitops file byte limit")
+        resolved = self._resolve_deployment_revision()
+        if revision != resolved["revision"]:
+            raise ProviderError("gitops revision is not the resolved deployment revision")
         self.calls.increment(
             f"gitops.read_file_at_revision.{path_id}",
             {"path_id": path_id, "revision": revision, "target": target, "max_bytes": max_bytes},
@@ -411,3 +428,50 @@ def _require_list(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         raise ProviderError("backend collection is malformed")
     return value
+
+
+def _require_rollout_record(value: Any, bounds: ProviderBounds) -> RolloutBackendRecord:
+    raw = _require_mapping(value)
+    required = {
+        "name",
+        "namespace",
+        "ready_replicas",
+        "desired_replicas",
+        "available_replicas",
+        "conditions",
+        "phase",
+        "current_step",
+        "stable_service",
+        "canary_service",
+        "analysis_runs",
+    }
+    if not required.issubset(raw):
+        raise ProviderError("rollout backend record is incomplete")
+    conditions = _require_list(raw["conditions"])
+    analysis_runs = _require_list(raw["analysis_runs"])
+    if len(conditions) > bounds.max_conditions or len(analysis_runs) > bounds.max_analysis_runs:
+        raise ProviderError("rollout backend record exceeds collection limit")
+    return raw  # type: ignore[return-value]
+
+
+def _workload_from_rollout(rollout: RolloutBackendRecord) -> dict[str, Any]:
+    return {
+        "name": rollout["name"],
+        "namespace": rollout["namespace"],
+        "ready_replicas": rollout["ready_replicas"],
+        "desired_replicas": rollout["desired_replicas"],
+        "available_replicas": rollout["available_replicas"],
+        "conditions": deepcopy(rollout["conditions"]),
+    }
+
+
+def _rollout_from_record(rollout: RolloutBackendRecord) -> dict[str, Any]:
+    return {
+        "name": rollout["name"],
+        "namespace": rollout["namespace"],
+        "phase": rollout["phase"],
+        "current_step": rollout["current_step"],
+        "stable_service": rollout["stable_service"],
+        "canary_service": rollout["canary_service"],
+        "analysis_runs": deepcopy(rollout["analysis_runs"]),
+    }

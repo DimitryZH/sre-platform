@@ -138,10 +138,12 @@ class FakeGitOpsProvider:
         self.calls.increment("gitops.get_deployment_revision", {"target": target})
         return deepcopy(self.application)
 
-    def read_file_at_revision(self, path_id: str, revision: str, *, target: dict[str, Any]) -> dict[str, Any]:
+    def read_file_at_revision(
+        self, path_id: str, revision: str, *, target: dict[str, Any], max_bytes: int
+    ) -> dict[str, Any]:
         self.calls.increment(
             f"gitops.read_file_at_revision.{path_id}",
-            {"path_id": path_id, "revision": revision, "target": target},
+            {"path_id": path_id, "revision": revision, "target": target, "max_bytes": max_bytes},
         )
         value = deepcopy(self.files_by_path_id.get(path_id, {}))
         value["revision"] = revision

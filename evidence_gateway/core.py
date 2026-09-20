@@ -369,7 +369,12 @@ class EvidenceGateway:
         files = []
         for path_id in sorted(GITOPS_PATH_IDS):
             item = _expect_mapping(
-                self.providers.gitops.read_file_at_revision(path_id, revision, target=context["target"]),
+                self.providers.gitops.read_file_at_revision(
+                    path_id,
+                    revision,
+                    target=context["target"],
+                    max_bytes=self.policy.limits.max_gitops_file_bytes,
+                ),
                 "gitops file",
             )
             files.append(self._project_gitops_file(path_id, item, revision))

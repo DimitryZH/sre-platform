@@ -211,6 +211,54 @@ audit fields. `audit.response_bytes` is the byte length of the final canonical
 response envelope, including that field itself, and the allowed response limit
 is enforced against the same final envelope.
 
+## Private Runtime Boundary
+
+The repository includes a private WSGI runtime boundary with one route only:
+
+```text
+POST /v1/evidence/staging/frontend
+Authorization: Bearer <projected-service-account-token>
+X-Request-Nonce: <safe nonce>
+Content-Type: application/json
+```
+
+Its JSON body retains only the typed B1 request fields. An `auth` field in the
+body is rejected. An injected TokenReview contract must return exactly the
+audience `sre-platform-evidence-gateway` and the Kubernetes subject
+`system:serviceaccount:evidence-gateway-validation:staging-evidence-client`.
+The runtime derives the B1 identity, scope, issue/expiry times, and nonce
+envelope on the server; it never accepts them from the caller body. The runtime
+token configuration reserves a separate projected Kubernetes API token path
+with audience `https://kubernetes.default.svc`.
+
+Replay entries, hourly request rate entries, and sanitized audit events are
+stored in bounded SQLite state. The runtime prunes expired replay/rate records
+and retained audit records deterministically. It enforces count, logical-byte,
+and combined SQLite/WAL/SHM byte limits; recovery, capacity, serialization, or
+audit failures deny the request. Durable audit data contains only approved
+identity, request, decision, identifier, count, and byte-total fields. It
+excludes bearer tokens, nonces, raw evidence, provider parameters, response
+content, and backend error details.
+
+Internal source and GitHub-proxy transports are typed and mTLS-validated before
+their injected backend is called. The gateway client identity is the exact URI
+SAN `spiffe://evidence-gateway-stage/gateway`. Source and GitHub-proxy server
+certificates must be trusted by the configured CA and match their exact DNS and
+URI SANs. Any trust, expiry, DNS, or URI mismatch fails closed. The source
+transport exposes only frontend state and deployment-revision operations; it
+accepts no generic resource, selector, URL, query, or Git reference input.
+
+GitHub-proxy reads accept an allowlisted path ID and immutable SHA only. The
+response JSON/base64 envelope is limited to 16 KiB and decoded content is
+limited to 4 KiB. Invalid shapes, paths, revisions, encodings, oversized
+content, and HTTP 403/429 responses return the deterministic unavailable
+backend response without exposing transport detail.
+
+In this runtime foundation, Events, logs, Prometheus, and pod-status requests
+are unavailable and fail before a source or backend transport is called.
+AnalysisRuns are excluded from runtime state evidence unless the source output
+proves an empty set; unapproved AnalysisRun data fails closed.
+
 ## Non-Claims
 
 B1 does not include:
@@ -222,3 +270,7 @@ B1 does not include:
 - model invocation;
 - downstream integration;
 - Scheduler, PagerDuty, remediation, or production access.
+
+The runtime foundation also does not include deployable Kubernetes manifests,
+container registry references, image publication, live clients, or network
+operations.

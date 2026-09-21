@@ -25,19 +25,55 @@ owned by the server policy and fixed to the approved staging target:
 - Argo CD Application: `online-shop-stage`
 - maximum time range: 60 minutes
 
-The only B1 caller identity is the neutral `staging-evidence-client`. This is
-an offline contract identity, not a HolmesGPT or AI Operations identity. The
-concrete private transport identity is intentionally deferred to B3.
+The only caller identity is the neutral `staging-evidence-client`. This is an
+offline contract identity; no concrete transport identity is implemented here.
 
-All providers in B1 are fake in-memory providers. They are used only to prove
-contract shape, projection, sanitization, limits, fail-closed behavior, and
-zero provider calls for policy rejections. Provider parameters are built only
-from the validated server-approved request and include the approved target plus
-the approved start/end time range where applicable. The future B2 adapter
-contract receives server-owned limits before every backend call: Events receive
-their maximum item count; logs receive maximum lines, bytes, and line length;
-Prometheus receives maximum values per template; and pod status receives the
-fixed frontend selector and maximum pod count.
+The B1 fake providers remain in-memory test doubles for contract shape,
+projection, sanitization, limits, fail-closed behavior, and zero provider calls
+for policy rejections. Provider parameters are built only from the validated
+server-approved request and include the approved target plus the approved
+start/end time range where applicable. Events receive their maximum item count;
+logs receive maximum lines, bytes, and line length; Prometheus receives maximum
+values per template; and pod status receives the fixed frontend selector and
+maximum pod count.
+
+## Offline Provider Adapters
+
+The repository also provides adapters whose backend protocols are injected by
+local contract tests. They create no clients, read no credentials, and perform
+no network I/O. The adapters retain the B1 provider method signatures and call
+only narrow backend operations:
+
+- Kubernetes state uses exact namespace/name reads for `Rollout/frontend` and
+  the Ingress. The adapter derives both workload and rollout evidence from the
+  normalized Rollout response; it does not request `Deployment/frontend`. Pod
+  status uses the fixed frontend selector and limit; Events use exact
+  involved-object pairs while consuming one bounded total.
+- Container logs use the fixed namespace, workload, and frontend container with
+  server-owned time, line, byte, and line-length limits.
+- Prometheus accepts template IDs only and has no raw query method. The current
+  B2 adapter marks both available recording-rule templates unavailable before
+  transport because their aggregated output cannot distinguish the approved
+  staging target.
+- Deployment revision resolves the exact Argo CD Application and requires an
+  immutable commit SHA. GitOps files use allowlisted path IDs only and can be
+  read only at that resolved SHA with a server-owned byte limit.
+
+Malformed, broad, ambiguous, or over-limit adapter requests fail before a
+backend method is called. Backend exceptions and limit violations map to the
+existing deterministic unavailable-backend response through the Gateway.
+
+### Normalized Backend Inputs
+
+Transport backends return narrow normalized records, not arbitrary Gateway
+responses. A Rollout record contains its identity, replica counts, conditions,
+phase, current step, stable/canary services, and Rollout-owned AnalysisRuns;
+the adapter derives the two Kubernetes state inputs from it. Pod, Event, and
+log records use the bounded fields listed in their evidence sections below.
+Argo CD returns the requested Application identity and sync/health status.
+GitOps returns only the content of the adapter-selected allowlisted path at the
+adapter-verified SHA. The current B2 Prometheus adapter makes no backend query:
+the available aggregated recording-rule output is not target-distinguishable.
 
 ## Allowed Evidence
 
@@ -55,6 +91,10 @@ Allowed Prometheus template IDs are:
 
 - `slo_error_ratio_5m` -> `slo:error_ratio_5m`
 - `slo_burn_rate_5m` -> `slo:burn_rate_5m`
+
+The B1 fake provider continues to cover this abstract bounded template
+contract. The current B2 adapter rejects both templates before calling its
+backend because the recording-rule output is not target-distinguishable.
 
 The namespace-only ingress request-rate query is intentionally not included in
 B1 because the current contract does not prove an exact frontend/ingress
@@ -82,7 +122,6 @@ part of the request schema.
 Kubernetes Events are limited to exact approved `(kind, name)` pairs:
 
 - `Rollout/frontend`
-- `Deployment/frontend`
 - `Ingress/online-shop-frontend`
 
 AnalysisRuns are returned only when ownership is deterministically proven by
@@ -163,8 +202,7 @@ provider calls and replay denials do not reuse cumulative audit state. Audit
 also includes the validated request ID, safe caller identity, operation, target,
 time range, decision or denial reason, request fingerprint, evidence ID/result
 digest where available, revision where applicable, counts, and byte totals. A
-future deployment-facing envelope may remove or further restrict that
-diagnostic detail if needed.
+deployment-facing implementation is not included in this repository slice.
 
 Replay and offline rate-policy denials retain that safe context only after the
 request has completed schema, authentication, target, and time-range
@@ -181,6 +219,6 @@ B1 does not include:
 - credentials;
 - ServiceAccounts, RBAC, IAM, network, or private endpoint resources;
 - deployable resources under actively reconciled GitOps paths;
-- HolmesGPT or model invocation;
-- AI Operations Platform integration;
+- model invocation;
+- downstream integration;
 - Scheduler, PagerDuty, remediation, or production access.

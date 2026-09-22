@@ -4,9 +4,11 @@ import base64
 import io
 import json
 import tempfile
+import threading
 import unittest
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -122,18 +124,40 @@ class FakeGitHubProxy:
             "burn_rate_alerts": "charts/platform/templates/burn-rate-alerts.yaml",
         }[path_id]
         body = self.raw_body or json.dumps(
-            {"path": path, "encoding": "base64", "content": base64.b64encode(self.content.encode()).decode()}
+            {
+                "type": "file",
+                "name": path.rsplit("/", 1)[-1],
+                "path": path,
+                "encoding": "base64",
+                "size": len(self.content.encode()),
+                "content": base64.b64encode(self.content.encode()).decode() + "\n",
+                "sha": "d" * 40,
+            }
         ).encode()
         return GitHubProxyResponse(status=self.status, body=body)
 
 
-def certificate(*, dns: str | None = None, uri: str, trusted: bool = True) -> PeerCertificate:
+def certificate(
+    *,
+    dns: str | None = None,
+    uri: str,
+    trusted: bool = True,
+    eku: frozenset[str] | None = None,
+    not_before: datetime | None = None,
+    not_after: datetime | None = None,
+) -> PeerCertificate:
     return PeerCertificate(
         trusted_by_configured_ca=trusted,
         dns_names=frozenset(() if dns is None else {dns}),
         uri_sans=frozenset({uri}),
-        not_after=NOW + timedelta(days=1),
+        extended_key_usages=eku or frozenset({"clientAuth" if dns is None else "serverAuth"}),
+        not_before=not_before or NOW - timedelta(days=1),
+        not_after=not_after or NOW + timedelta(days=1),
     )
+
+
+def nonce(label: str) -> str:
+    return base64.urlsafe_b64encode(sha256(label.encode("utf-8")).digest()).decode("ascii").rstrip("=")
 
 
 class RuntimeGatewayTests(unittest.TestCase):
@@ -178,11 +202,11 @@ class RuntimeGatewayTests(unittest.TestCase):
             }
         ).encode()
 
-    def headers(self, nonce: str = "runtime-nonce-001") -> dict[str, str]:
+    def headers(self, nonce_label: str = "runtime-nonce-001") -> dict[str, str]:
         return {
             "Authorization": "Bearer projected-token",
             "Content-Type": "application/json",
-            "X-Request-Nonce": nonce,
+            "X-Request-Nonce": nonce(nonce_label),
         }
 
     def call(self, **kwargs: Any):
@@ -204,6 +228,8 @@ class RuntimeGatewayTests(unittest.TestCase):
         self.assertEqual(len(self.github_proxy.calls), 7)
         self.assertTrue(all(call["revision"] == REVISION for call in self.github_proxy.calls))
         self.assertTrue(all(call["max_response_bytes"] == 16 * 1024 for call in self.github_proxy.calls))
+        gitops = next(section for section in response.body["result"]["sections"] if section["kind"] == "gitops")
+        self.assertTrue(all(item["content"] == "kind: ConfigMap\n" for item in gitops["data"]["files"]))
         stored = self.state.audit_events()[0]
         self.assertEqual(stored["kubernetes_subject"], VALIDATION_KUBERNETES_SUBJECT)
         self.assertNotIn("provider_call_params", stored)
@@ -228,10 +254,67 @@ class RuntimeGatewayTests(unittest.TestCase):
         self.assertEqual(self.call(body=json.dumps(body).encode()).body["error"]["code"], "body_auth_forbidden")
         self.assertEqual(
             self.call(headers={"Authorization": "Bearer projected-token", "Content-Type": "application/json"}).status,
-            401,
+            400,
         )
         self.assertEqual(self.providers.total_calls(), 0)
-        self.assertEqual(self.state.audit_events(), [])
+        audit = self.state.audit_events()[0]
+        self.assertEqual(audit["denial_reason"], "body_auth_forbidden")
+        self.assertEqual(audit["rate_subject"], VALIDATION_KUBERNETES_SUBJECT)
+
+    def test_authenticated_format_denials_are_guarded_and_audited_without_provider_calls(self) -> None:
+        malformed = self.call(body=b"{not-json", headers=self.headers("malformed-json"))
+        body_auth = json.loads(self.request().decode())
+        body_auth["auth"] = {"subject": "forged"}
+        forbidden = self.call(
+            body=json.dumps(body_auth).encode(),
+            headers=self.headers("body-auth-audit"),
+        )
+
+        self.assertEqual(malformed.status, 400)
+        self.assertEqual(forbidden.status, 400)
+        self.assertEqual(self.providers.total_calls(), 0)
+        audits = self.state.audit_events()
+        self.assertEqual([audit["denial_reason"] for audit in audits], ["malformed_request", "body_auth_forbidden"])
+        self.assertNotIn("evidence_kinds", audits[0])
+        self.assertEqual(audits[1]["evidence_kinds"], ["deployment_revision", "gitops", "kubernetes_state"])
+        self.assertTrue(all(audit["event_time"].endswith("Z") for audit in audits))
+        rate_subjects = self.state._require_connection().execute("SELECT DISTINCT subject FROM rate_events").fetchall()
+        self.assertEqual(rate_subjects, [(VALIDATION_KUBERNETES_SUBJECT,)])
+
+        replay = self.call(body=b"{not-json", headers=self.headers("malformed-json"))
+        self.assertEqual(replay.status, 429)
+        self.assertEqual(replay.body["error"]["code"], "replay_rejected")
+
+    def test_nonce_must_be_canonical_unpadded_base64url_for_32_bytes(self) -> None:
+        invalid_values = ("A" * 42, nonce("canonical") + "=", "+" + nonce("canonical")[1:])
+        for index, value in enumerate(invalid_values):
+            headers = {"Authorization": "Bearer projected-token", "Content-Type": "application/json", "X-Request-Nonce": value}
+            response = self.call(headers=headers, body=self.request(nonce=f"invalid-{index}"))
+            self.assertEqual(response.status, 400)
+            self.assertEqual(response.body["error"]["code"], "invalid_nonce")
+        self.assertEqual(self.providers.total_calls(), 0)
+        self.assertEqual(len(self.state.audit_events()), len(invalid_values))
+
+    def test_concurrent_duplicate_nonce_allows_only_one_guard_reservation(self) -> None:
+        request = self.request(nonce="concurrent", kinds=["prometheus"])
+        headers = self.headers("concurrent")
+        barrier = threading.Barrier(2)
+        responses: list[int] = []
+
+        def invoke() -> None:
+            barrier.wait()
+            responses.append(self.call(headers=headers, body=request).status)
+
+        first = threading.Thread(target=invoke)
+        second = threading.Thread(target=invoke)
+        first.start()
+        second.start()
+        first.join()
+        second.join()
+
+        self.assertEqual(sorted(responses), [429, 503])
+        self.assertEqual(self.providers.total_calls(), 0)
+        self.assertEqual(len(self.state.audit_events()), 2)
 
     def test_replay_and_rate_denials_keep_safe_audit_context_and_make_no_provider_calls(self) -> None:
         self.assertEqual(self.call().status, 200)
@@ -277,6 +360,31 @@ class RuntimeGatewayTests(unittest.TestCase):
         self.assertEqual(response.body["error"]["code"], "backend_unavailable")
         self.assertEqual(len(self.github_proxy.calls), 1)
 
+    def test_mtls_validity_eku_and_malformed_certificate_fail_before_transport(self) -> None:
+        for index, certificate_value in enumerate(
+            (
+                certificate(dns=SOURCE_DNS_SAN, uri=SOURCE_URI_SAN, not_before=NOW + timedelta(seconds=1)),
+                certificate(dns=SOURCE_DNS_SAN, uri=SOURCE_URI_SAN, not_after=NOW),
+                certificate(dns=SOURCE_DNS_SAN, uri=SOURCE_URI_SAN, eku=frozenset({"clientAuth"})),
+                object(),
+            )
+        ):
+            self.kubernetes.source.server_certificate = certificate_value
+            response = self.call(
+                headers=self.headers(f"certificate-{index}"),
+                body=self.request(nonce=f"certificate-{index}", kinds=["kubernetes_state"]),
+            )
+            self.assertEqual(response.status, 503)
+            self.assertEqual(response.body["error"]["code"], "backend_unavailable")
+        self.kubernetes.source.server_certificate = certificate(dns=SOURCE_DNS_SAN, uri=SOURCE_URI_SAN)
+        self.kubernetes.source.client_certificate = object()
+        response = self.call(
+            headers=self.headers("malformed-client-certificate"),
+            body=self.request(nonce="malformed-client-certificate", kinds=["kubernetes_state"]),
+        )
+        self.assertEqual(response.status, 503)
+        self.assertEqual(self.source.state_calls, 0)
+
     def test_analysis_runs_are_not_accepted_by_the_runtime_source_contract(self) -> None:
         self.source.state["rollout"]["analysis_runs"] = [
             {"name": "frontend-run", "owner_kind": "Rollout", "owner_name": "frontend"}
@@ -318,7 +426,7 @@ class RuntimeGatewayTests(unittest.TestCase):
                     "wsgi.input": io.BytesIO(self.request(kinds=["kubernetes_state"])),
                     "HTTP_AUTHORIZATION": "Bearer projected-token",
                     "CONTENT_TYPE": "application/json",
-                    "HTTP_X_REQUEST_NONCE": "wsgi-nonce-001",
+                    "HTTP_X_REQUEST_NONCE": nonce("wsgi-nonce-001"),
                 },
                 start_response,
             )
@@ -374,6 +482,49 @@ class RuntimeStateTests(unittest.TestCase):
             with self.assertRaises(RuntimeStateError):
                 state.write_audit({"request_id": "req", "decision": "allowed", "counts": {"value": float("nan")}}, now=NOW)
             state.close()
+
+    def test_transaction_rolls_back_guard_data_when_audit_write_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state = RuntimeState(Path(directory) / "state.db")
+            nonce_value = "transaction-nonce"
+            nonce_hash = sha256(nonce_value.encode()).hexdigest()
+            with self.assertRaises(RuntimeStateError):
+                with state.request_transaction(
+                    subject=VALIDATION_KUBERNETES_SUBJECT,
+                    nonce_hash=nonce_hash,
+                    now=NOW,
+                    expires_at=NOW + timedelta(minutes=1),
+                ) as transaction:
+                    transaction.write_audit({"decision": "denied", "counts": {"token": "forbidden"}}, now=NOW)
+            state.check_and_record(
+                subject=VALIDATION_KUBERNETES_SUBJECT,
+                nonce=nonce_value,
+                now=NOW,
+                expires_at=NOW + timedelta(minutes=1),
+            )
+            state.close()
+
+    def test_replay_precision_and_corrupt_database_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state = RuntimeState(Path(directory) / "state.db")
+            state.check_and_record(
+                subject="client",
+                nonce="subsecond-nonce",
+                now=NOW,
+                expires_at=NOW + timedelta(microseconds=500_000),
+            )
+            with self.assertRaisesRegex(Exception, "request nonce"):
+                state.check_and_record(
+                    subject="client",
+                    nonce="subsecond-nonce",
+                    now=NOW + timedelta(microseconds=499_999),
+                    expires_at=NOW + timedelta(minutes=1),
+                )
+            state.close()
+            corrupted = Path(directory) / "corrupt.db"
+            corrupted.write_bytes(b"not a sqlite database")
+            with self.assertRaises(RuntimeStateError):
+                RuntimeState(corrupted)
 
 
 if __name__ == "__main__":

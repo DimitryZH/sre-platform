@@ -29,6 +29,8 @@ class PeerCertificate:
     trusted_by_configured_ca: bool
     dns_names: frozenset[str]
     uri_sans: frozenset[str]
+    extended_key_usages: frozenset[str]
+    not_before: datetime
     not_after: datetime
 
 
@@ -36,9 +38,12 @@ class InternalMTLSValidator:
     """Fail-closed verifier for the two internal service identities."""
 
     def validate_client(self, certificate: PeerCertificate, *, now: datetime) -> None:
-        self._validate_common(certificate, now)
-        if certificate.uri_sans != frozenset({GATEWAY_URI_SAN}):
-            raise ProviderError("internal client identity is unavailable")
+        try:
+            self._validate_common(certificate, now)
+            if certificate.uri_sans != frozenset({GATEWAY_URI_SAN}) or certificate.extended_key_usages != frozenset({"clientAuth"}):
+                raise ProviderError("internal client identity is unavailable")
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ProviderError("internal client identity is unavailable") from exc
 
     def validate_server(
         self,
@@ -48,15 +53,41 @@ class InternalMTLSValidator:
         expected_uri: str,
         now: datetime,
     ) -> None:
-        self._validate_common(certificate, now)
-        if certificate.dns_names != frozenset({expected_dns}) or certificate.uri_sans != frozenset({expected_uri}):
-            raise ProviderError("internal server identity is unavailable")
+        try:
+            self._validate_common(certificate, now)
+            if (
+                certificate.dns_names != frozenset({expected_dns})
+                or certificate.uri_sans != frozenset({expected_uri})
+                or certificate.extended_key_usages != frozenset({"serverAuth"})
+            ):
+                raise ProviderError("internal server identity is unavailable")
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ProviderError("internal server identity is unavailable") from exc
 
     @staticmethod
     def _validate_common(certificate: PeerCertificate, now: datetime) -> None:
+        if not isinstance(certificate, PeerCertificate):
+            raise ProviderError("internal certificate is unavailable")
+        if (
+            not isinstance(certificate.trusted_by_configured_ca, bool)
+            or not isinstance(certificate.dns_names, frozenset)
+            or not isinstance(certificate.uri_sans, frozenset)
+            or not isinstance(certificate.extended_key_usages, frozenset)
+            or not all(isinstance(value, str) for value in certificate.dns_names | certificate.uri_sans | certificate.extended_key_usages)
+            or not isinstance(certificate.not_before, datetime)
+            or not isinstance(certificate.not_after, datetime)
+            or not isinstance(now, datetime)
+        ):
+            raise ProviderError("internal certificate is unavailable")
         if not certificate.trusted_by_configured_ca:
             raise ProviderError("internal trust bundle is unavailable")
-        if certificate.not_after.tzinfo is None or certificate.not_after.astimezone(UTC) <= now.astimezone(UTC):
+        if (
+            certificate.not_before.tzinfo is None
+            or certificate.not_after.tzinfo is None
+            or now.tzinfo is None
+            or certificate.not_before.astimezone(UTC) > now.astimezone(UTC)
+            or certificate.not_after.astimezone(UTC) <= now.astimezone(UTC)
+        ):
             raise ProviderError("internal certificate is unavailable")
 
 
@@ -245,12 +276,21 @@ def _decode_github_contents(body: bytes, *, path_id: str, revision: str, max_byt
         envelope = json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ProviderError("github proxy response is malformed") from exc
-    if not isinstance(envelope, dict) or set(envelope) != {"path", "encoding", "content"}:
+    if not isinstance(envelope, dict):
         raise ProviderError("github proxy response is malformed")
-    if envelope["path"] != GITOPS_PATHS[path_id] or envelope["encoding"] != "base64" or not isinstance(envelope["content"], str):
+    required = {"type", "path", "encoding", "content"}
+    if not required.issubset(envelope):
+        raise ProviderError("github proxy response is malformed")
+    if (
+        envelope["type"] != "file"
+        or envelope["path"] != GITOPS_PATHS[path_id]
+        or envelope["encoding"] != "base64"
+        or not isinstance(envelope["content"], str)
+    ):
         raise ProviderError("github proxy response is outside the approved boundary")
     try:
-        decoded = base64.b64decode(envelope["content"], validate=True)
+        encoded = envelope["content"].replace("\n", "").replace("\r", "")
+        decoded = base64.b64decode(encoded, validate=True)
         content = decoded.decode("utf-8")
     except (binascii.Error, UnicodeDecodeError) as exc:
         raise ProviderError("github proxy content is malformed") from exc

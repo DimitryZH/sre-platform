@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
@@ -10,7 +12,7 @@ from typing import Any, Mapping, Protocol
 
 from ..canonical import canonical_json
 from ..core import EvidenceGateway
-from ..policy import EvidenceError, EvidencePolicy, SAFE_ID_RE
+from ..policy import EVIDENCE_KINDS, EvidenceError, EvidencePolicy
 from ..providers import EvidenceProviders
 from .state import RuntimeState, RuntimeStateError
 
@@ -20,6 +22,7 @@ KUBERNETES_API_AUDIENCE = "https://kubernetes.default.svc"
 VALIDATION_KUBERNETES_SUBJECT = "system:serviceaccount:evidence-gateway-validation:staging-evidence-client"
 POLICY_SUBJECT = "staging-evidence-client"
 MAX_HTTP_REQUEST_BYTES = 8 * 1024
+NONCE_RE = re.compile(r"^[A-Za-z0-9_-]{43}$")
 
 
 @dataclass(frozen=True)
@@ -50,21 +53,15 @@ class RuntimeResponse:
         return canonical_json(self.body).encode("utf-8")
 
 
-class DurableEvidencePolicy(EvidencePolicy):
-    """B1 validation plus SQLite-backed replay and rate enforcement."""
+class RuntimeEvidencePolicy(EvidencePolicy):
+    """B1 schema and target validation after the runtime reserves durable state."""
 
-    def __init__(self, state: RuntimeState) -> None:
+    def __init__(self) -> None:
         super().__init__(allowed_subjects=frozenset({POLICY_SUBJECT}))
-        self.state = state
 
     def enforce_request_guards(self, approved_request: dict[str, Any], *, now: datetime | None = None) -> None:
-        current = now or datetime.now(UTC)
-        self.state.check_and_record(
-            subject=approved_request["caller_identity"],
-            nonce=approved_request["_replay_nonce"],
-            now=current,
-            expires_at=approved_request["_auth_expires_at"],
-        )
+        # RuntimeGateway reserves the nonce and rate slot before parsing the body.
+        return None
 
 
 class RuntimeGateway:
@@ -81,7 +78,7 @@ class RuntimeGateway:
         self.token_reviewer = token_reviewer
         self.state = state
         self.runtime_token = runtime_token
-        self.evidence = EvidenceGateway(DurableEvidencePolicy(state), providers)
+        self.evidence = EvidenceGateway(RuntimeEvidencePolicy(), providers)
 
     def handle(
         self,
@@ -94,56 +91,81 @@ class RuntimeGateway:
     ) -> RuntimeResponse:
         if method != "POST" or path != HTTP_OPERATION_PATH:
             return _failure(404, "unknown_operation")
-        if not isinstance(body, bytes) or len(body) > MAX_HTTP_REQUEST_BYTES:
-            return _failure(400, "malformed_request")
-        current = now or datetime.now(UTC)
         token = _bearer_token(headers)
-        nonce = _header(headers, "x-request-nonce")
-        if _header(headers, "content-type") != "application/json":
-            return _failure(400, "malformed_request")
-        if token is None or not isinstance(nonce, str) or not SAFE_ID_RE.fullmatch(nonce):
+        if token is None:
             return _failure(401, "unauthorized")
         identity = self._authenticate(token)
         if identity is None:
             return _failure(401, "unauthorized")
+
+        current = now or datetime.now(UTC)
+        nonce = _header(headers, "x-request-nonce")
+        nonce_hash = sha256((nonce if isinstance(nonce, str) else "").encode("utf-8")).hexdigest()
+        nonce_is_valid = _decode_nonce(nonce) is not None
+        try:
+            with self.state.request_transaction(
+                subject=identity,
+                nonce_hash=nonce_hash,
+                now=current,
+                expires_at=current + timedelta(minutes=10),
+            ) as transaction:
+                audit = _base_audit(current, identity, nonce_hash)
+                response = self._collect_or_deny(
+                    transaction.denial,
+                    nonce_is_valid=nonce_is_valid,
+                    nonce=nonce,
+                    headers=headers,
+                    body=body,
+                    now=current,
+                    audit=audit,
+                )
+                response_audit = response["audit"]
+                response_audit.update(audit)
+                self.evidence._finalize_response(
+                    response,
+                    enforce_max_result_bytes=response.get("outcome") == "allowed",
+                )
+                transaction.write_audit(response_audit, now=current)
+        except (EvidenceError, RuntimeStateError):
+            return _failure(503, "audit_unavailable")
+        return RuntimeResponse(status=_status_for(response), body=response)
+
+    def _collect_or_deny(
+        self,
+        guard_denial: EvidenceError | None,
+        *,
+        nonce_is_valid: bool,
+        nonce: str | None,
+        headers: Mapping[str, str],
+        body: bytes,
+        now: datetime,
+        audit: dict[str, Any],
+    ) -> dict[str, Any]:
+        if guard_denial is not None:
+            return _denied(guard_denial.code, audit)
+        if not nonce_is_valid:
+            return _denied("invalid_nonce", audit)
+        if _header(headers, "content-type") != "application/json" or not isinstance(body, bytes) or len(body) > MAX_HTTP_REQUEST_BYTES:
+            return _denied("malformed_request", audit)
         try:
             request = json.loads(body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
-            return _failure(400, "malformed_request")
+            return _denied("malformed_request", audit)
         if not isinstance(request, dict):
-            return _failure(400, "malformed_request")
+            return _denied("malformed_request", audit)
+        audit["evidence_kinds"] = _safe_evidence_kinds(request.get("evidence_kinds"))
         if "auth" in request:
-            return _failure(400, "body_auth_forbidden")
+            return _denied("body_auth_forbidden", audit)
         request_with_auth = dict(request)
         request_with_auth["auth"] = {
             "subject": POLICY_SUBJECT,
             "audience": EXTERNAL_TOKEN_AUDIENCE,
             "scope": "evidence.read.staging.frontend",
-            "issued_at": _format(current),
-            "expires_at": _format(current + timedelta(minutes=10)),
+            "issued_at": _format(now),
+            "expires_at": _format(now + timedelta(minutes=10)),
             "nonce": nonce,
         }
-        response = self.evidence.collect(request_with_auth, now=current)
-        audit = response.get("audit")
-        if isinstance(audit, dict):
-            audit.update(
-                {
-                    "kubernetes_subject": identity,
-                    "policy_subject": POLICY_SUBJECT,
-                    "authentication_method": "kubernetes_tokenreview",
-                    "token_audience": EXTERNAL_TOKEN_AUDIENCE,
-                    "nonce_sha256": sha256(nonce.encode("utf-8")).hexdigest(),
-                }
-            )
-            try:
-                self.evidence._finalize_response(
-                    response,
-                    enforce_max_result_bytes=response.get("outcome") == "allowed",
-                )
-                self.state.write_audit(audit, now=current)
-            except (EvidenceError, RuntimeStateError):
-                return _failure(503, "audit_unavailable")
-        return RuntimeResponse(status=_status_for(response), body=response)
+        return self.evidence.collect(request_with_auth, now=now)
 
     def _authenticate(self, token: str) -> str | None:
         try:
@@ -155,6 +177,61 @@ class RuntimeGateway:
         if reviewed.username != VALIDATION_KUBERNETES_SUBJECT or reviewed.audiences != frozenset({EXTERNAL_TOKEN_AUDIENCE}):
             return None
         return reviewed.username
+
+
+def _base_audit(now: datetime, identity: str, nonce_hash: str) -> dict[str, Any]:
+    return {
+        "event_time": _format(now),
+        "kubernetes_subject": identity,
+        "rate_subject": identity,
+        "policy_subject": POLICY_SUBJECT,
+        "authentication_method": "kubernetes_tokenreview",
+        "token_audience": EXTERNAL_TOKEN_AUDIENCE,
+        "nonce_sha256": nonce_hash,
+    }
+
+
+def _denied(code: str, audit: dict[str, Any]) -> dict[str, Any]:
+    envelope = {
+        "schema_version": "evidence-gateway.b1.v1",
+        "outcome": "denied",
+        "error": {"code": code},
+        "audit": {
+            "decision": "denied",
+            "denial_reason": code,
+            "provider_calls": {},
+            "provider_call_count": 0,
+            "result_bytes": 0,
+            **audit,
+        },
+    }
+    response_bytes = 0
+    for _ in range(16):
+        envelope["audit"]["response_bytes"] = response_bytes
+        actual = len(canonical_json(envelope).encode("utf-8"))
+        if actual == response_bytes:
+            return envelope
+        response_bytes = actual
+    raise RuntimeStateError()
+
+
+def _safe_evidence_kinds(value: Any) -> list[str]:
+    if not isinstance(value, list) or any(not isinstance(item, str) or item not in EVIDENCE_KINDS for item in value):
+        return []
+    return sorted(set(value))
+
+
+def _decode_nonce(value: Any) -> bytes | None:
+    if not isinstance(value, str) or not NONCE_RE.fullmatch(value):
+        return None
+    try:
+        decoded = base64.b64decode(value + "=", altchars=b"-_", validate=True)
+    except (ValueError, TypeError):
+        return None
+    if len(decoded) != 32:
+        return None
+    canonical = base64.urlsafe_b64encode(decoded).decode("ascii").rstrip("=")
+    return decoded if canonical == value else None
 
 
 def _header(headers: Mapping[str, str], name: str) -> str | None:
@@ -191,7 +268,7 @@ def _status_for(response: dict[str, Any]) -> int:
 
 
 def _format(value: datetime) -> str:
-    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+    return value.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 class PrivateHTTPApplication:
@@ -205,24 +282,23 @@ class PrivateHTTPApplication:
             content_length = int(environ.get("CONTENT_LENGTH") or 0)
         except (TypeError, ValueError):
             content_length = MAX_HTTP_REQUEST_BYTES + 1
-        if content_length < 0 or content_length > MAX_HTTP_REQUEST_BYTES:
-            response = _failure(400, "malformed_request")
-        else:
-            stream = environ.get("wsgi.input")
-            body = stream.read(content_length) if stream is not None else b""
-            headers = {
-                key[5:].replace("_", "-"): value
-                for key, value in environ.items()
-                if key.startswith("HTTP_") and isinstance(value, str)
-            }
-            if isinstance(environ.get("CONTENT_TYPE"), str):
-                headers["Content-Type"] = environ["CONTENT_TYPE"]
-            response = self.gateway.handle(
-                method=environ.get("REQUEST_METHOD", ""),
-                path=environ.get("PATH_INFO", ""),
-                headers=headers,
-                body=body,
-            )
+        stream = environ.get("wsgi.input")
+        body = b"\x00" * (MAX_HTTP_REQUEST_BYTES + 1) if content_length < 0 or content_length > MAX_HTTP_REQUEST_BYTES else (
+            stream.read(content_length) if stream is not None else b""
+        )
+        headers = {
+            key[5:].replace("_", "-"): value
+            for key, value in environ.items()
+            if key.startswith("HTTP_") and isinstance(value, str)
+        }
+        if isinstance(environ.get("CONTENT_TYPE"), str):
+            headers["Content-Type"] = environ["CONTENT_TYPE"]
+        response = self.gateway.handle(
+            method=environ.get("REQUEST_METHOD", ""),
+            path=environ.get("PATH_INFO", ""),
+            headers=headers,
+            body=body,
+        )
         payload = response.json_bytes()
         start_response(
             f"{response.status} {_reason(response.status)}",

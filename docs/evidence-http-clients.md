@@ -87,3 +87,58 @@ Events, logs, pod status and Prometheus have no client operations here.
 Offline tests inject connections and certificate loading, prohibit sockets,
 and exercise exact requests, identity failures, malformed responses, streamed
 limits, timeouts, safe error mapping and complete runtime collection.
+
+## Private Source Service
+
+`evidence_gateway.runtime.source_service.PrivateSourceService` dispatches only
+`GET /v1/evidence/staging/frontend/state` and
+`GET /v1/evidence/staging/frontend/deployment-revision`. It uses injected
+`KubernetesEvidenceAdapter` and `ArgoCDGitOpsAdapter` instances. It does not
+open a listener, create a Kubernetes API client, or discover credentials.
+
+The `handle` boundary accepts peer facts exclusively through its separate
+trusted-transport argument. Those facts must describe the verified TLS peer
+on the same connection, not an HTTP header, body, or caller assertion.
+The existing mTLS validator requires configured-CA trust, exactly the gateway
+URI SAN `spiffe://evidence-gateway-stage/gateway`, exactly `clientAuth` EKU,
+and a currently valid, timezone-aware certificate interval at full precision.
+Missing, malformed, untrusted, expired, or wrong-identity peers receive a
+fixed 401 response without adapter calls. The dispatcher itself does not
+perform a TLS handshake or establish certificate trust.
+
+The transport must preserve the original request target, reject duplicate
+headers before constructing the header mapping, bound header parsing, and
+reject nonempty request bodies without unbounded buffering. The dispatcher
+requires an empty bytes body and exact route matching:
+it does not decode, normalize or follow supplied paths. Query strings,
+fragments, alternate methods, and all other routes are rejected. Only a fixed
+source Host (optionally with port 8443), `Accept: application/json`,
+`Accept-Encoding: identity`, and `Content-Length: 0` are permitted; Host is
+required and other headers are optional. Duplicate case-insensitive header
+names and all other headers, including authentication and forwarded identity
+headers, are rejected. Invalid requests cause zero adapter/backend calls.
+
+For state, the adapter reads only `Rollout/frontend` and
+`Ingress/online-shop-frontend` in `online-shop-stage`, using a fresh
+server-owned target. Workload and rollout projections come from that same
+normalized Rollout record, never a Deployment. Revision reads resolve only
+`Application/online-shop-stage` on each request and return its lowercase
+40-character immutable SHA, sync status and health status. No Git file read
+is performed by this service.
+
+Both sides use the same strict projections in `runtime.source_contract`.
+State is limited to the documented workload, rollout and ingress fields,
+at most eight conditions, bounded strings and integers, the exact `/stage`
+path and an empty AnalysisRun list. Nonempty AnalysisRun data is rejected;
+backends must supply that empty field without querying AnalysisRuns. No Events,
+logs, pod status, Prometheus or AnalysisRun operations are exposed or called.
+Raw or extra fields in the normalized source schema fail closed. Metadata
+already discarded by the adapters is not returned. Backend output is checked
+after the necessary read; malformed output cannot be detected before that read.
+
+Successful JSON responses are bounded to 16 KiB for state and 4096 bytes for
+revision, measured after canonical serialization. Backend exceptions,
+out-of-scope data, malformed projections and oversized responses become a
+fixed 503 `backend_unavailable` response, with no backend details or raw data.
+Offline tests exercise the dispatcher through `SourceHTTPClient`, both injected
+adapters, and runtime evidence collection, with sockets prohibited.

@@ -213,6 +213,9 @@ is enforced against the same final envelope.
 
 ## Private Runtime Boundary
 
+The concrete injected HTTPS clients are described in
+[Evidence HTTP Client Contracts](evidence-http-clients.md).
+
 The repository includes a private WSGI runtime boundary with one route only:
 
 ```text

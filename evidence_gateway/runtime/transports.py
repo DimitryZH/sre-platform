@@ -15,6 +15,7 @@ from ..policy import MAX_GITOPS_FILE_BYTES, SHA_RE
 from ..providers import ProviderCalls, ProviderError
 
 GATEWAY_URI_SAN = "spiffe://evidence-gateway-stage/gateway"
+GATEWAY_DNS_SAN = "evidence-gateway-stage.evidence-gateway-stage.svc"
 SOURCE_URI_SAN = "spiffe://evidence-gateway-stage/source"
 GITHUB_PROXY_URI_SAN = "spiffe://evidence-gateway-stage/github-egress"
 SOURCE_DNS_SAN = "evidence-source-stage.evidence-gateway-stage.svc"

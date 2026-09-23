@@ -1,0 +1,7 @@
+**
+!Dockerfile
+!requirements-runtime.txt
+!evidence_gateway/
+!evidence_gateway/**
+**/__pycache__/
+**/*.pyc

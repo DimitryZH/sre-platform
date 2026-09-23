@@ -1,6 +1,6 @@
 # Evidence HTTP Client Contracts
 
-`evidence_gateway.runtime.http_clients` implements three fixed-operation
+`evidence_gateway.runtime.http_clients` implements four fixed-operation
 HTTPS clients. Constructors require an injected `HTTPExecutor`; there is no
 default socket executor, credential discovery, or network call on import.
 The existing fake providers and runtime interfaces remain compatible.
@@ -10,6 +10,9 @@ The existing fake providers and runtime interfaces remain compatible.
 | Client | HTTPS destination | Method and route | Response limit |
 | --- | --- | --- | --- |
 | `KubernetesTokenReviewClient` | `kubernetes.default.svc:443` | `POST /apis/authentication.k8s.io/v1/tokenreviews` | 16 KiB |
+| `KubernetesObjectHTTPClient` | `kubernetes.default.svc:443` | `GET /apis/argoproj.io/v1alpha1/namespaces/online-shop-stage/rollouts/frontend` | 64 KiB |
+| `KubernetesObjectHTTPClient` | `kubernetes.default.svc:443` | `GET /apis/networking.k8s.io/v1/namespaces/online-shop-stage/ingresses/online-shop-frontend` | 32 KiB |
+| `KubernetesObjectHTTPClient` | `kubernetes.default.svc:443` | `GET /apis/argoproj.io/v1alpha1/namespaces/argocd/applications/online-shop-stage` | 32 KiB |
 | `SourceHTTPClient` | `evidence-source-stage.evidence-gateway-stage.svc:8443` | `GET /v1/evidence/staging/frontend/state` | 16 KiB |
 | `SourceHTTPClient` | same source service | `GET /v1/evidence/staging/frontend/deployment-revision` | 4 KiB |
 | `GitHubEgressHTTPClient` | `github-egress.evidence-gateway-stage.svc:8443` | `GET /repos/DimitryZH/sre-platform/contents/{allowlisted-path}?ref={immutable-sha}` | at most 16 KiB |
@@ -56,8 +59,10 @@ are trusted configuration and must describe the loaded certificate/key pair.
 
 The executor is the trusted I/O boundary. Its contract prohibits environment
 proxy discovery, redirects, retries, plaintext fallback, and unbounded header
-or body buffering. Only TLS connection creation is exposed. No live executor,
-Kubernetes source backend, deployment configuration, or resources are included.
+or body buffering. Only TLS connection creation is exposed. The runtime
+assembly supplies a direct stdlib TLS executor and exact-object source
+backends; all clients remain injectable for offline tests. No deployment
+configuration or resources are included.
 
 ## Bounded Responses
 
@@ -95,6 +100,13 @@ limits, timeouts, safe error mapping and complete runtime collection.
 `GET /v1/evidence/staging/frontend/deployment-revision`. It uses injected
 `KubernetesEvidenceAdapter` and `ArgoCDGitOpsAdapter` instances. It does not
 open a listener, create a Kubernetes API client, or discover credentials.
+The separate runtime assembly wraps this dispatcher in the mTLS listener and
+injects the exact-object Kubernetes and Argo CD clients described above.
+The same assembly exposes the Gateway request boundary through an HTTPS-only
+listener with the fixed Gateway Service DNS identity and `serverAuth` EKU.
+That edge does not request a client certificate; caller authentication remains
+the existing TokenReview flow. Its server identity is separate from the
+Gateway `clientAuth` identity used for source-service mTLS.
 
 The `handle` boundary accepts peer facts exclusively through its separate
 trusted-transport argument. Those facts must describe the verified TLS peer

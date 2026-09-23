@@ -28,6 +28,9 @@ from .transports import (
 
 TOKENREVIEW_HOST = "kubernetes.default.svc"
 TOKENREVIEW_PATH = "/apis/authentication.k8s.io/v1/tokenreviews"
+ROLLOUT_PATH = "/apis/argoproj.io/v1alpha1/namespaces/online-shop-stage/rollouts/frontend"
+INGRESS_PATH = "/apis/networking.k8s.io/v1/namespaces/online-shop-stage/ingresses/online-shop-frontend"
+APPLICATION_PATH = "/apis/argoproj.io/v1alpha1/namespaces/argocd/applications/online-shop-stage"
 _GITOPS_PATHS = MappingProxyType(dict(GITOPS_PATHS))
 _TOKEN_RE = re.compile(r"[A-Za-z0-9._~+/-]+=*", re.ASCII)
 _SAFE_ERROR = "approved HTTPS transport is unavailable"
@@ -220,6 +223,34 @@ class KubernetesTokenReviewClient(_HTTPSClient):
             if audiences != [EXTERNAL_TOKEN_AUDIENCE]:
                 raise ValueError()
             return TokenReviewResult(True, VALIDATION_KUBERNETES_SUBJECT, frozenset({EXTERNAL_TOKEN_AUDIENCE}))
+        except Exception:
+            raise ProviderError(_SAFE_ERROR) from None
+
+
+class KubernetesObjectHTTPClient(_HTTPSClient):
+    """Three exact object GETs used by the private source service only."""
+
+    def __init__(self, *, runtime_token_reader: Callable[[], str], **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._runtime_token_reader = runtime_token_reader
+
+    def get_frontend_rollout(self) -> dict[str, Any]:
+        return self._get(ROLLOUT_PATH, 64 * 1024)
+
+    def get_frontend_ingress(self) -> dict[str, Any]:
+        return self._get(INGRESS_PATH, 32 * 1024)
+
+    def get_stage_application(self) -> dict[str, Any]:
+        return self._get(APPLICATION_PATH, 32 * 1024)
+
+    def _get(self, path: str, limit: int) -> dict[str, Any]:
+        try:
+            runtime_token = self._runtime_token_reader()
+            _token(runtime_token)
+            return _json(self._exchange(
+                host=TOKENREVIEW_HOST, port=443, uri=None, method="GET", path=path,
+                limit=limit, authorization="Bearer " + runtime_token,
+            ))
         except Exception:
             raise ProviderError(_SAFE_ERROR) from None
 

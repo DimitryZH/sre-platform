@@ -74,11 +74,12 @@ class RuntimeGateway:
         providers: EvidenceProviders,
         state: RuntimeState,
         runtime_token: RuntimeTokenConfig = RuntimeTokenConfig(),
+        policy: EvidencePolicy | None = None,
     ) -> None:
         self.token_reviewer = token_reviewer
         self.state = state
         self.runtime_token = runtime_token
-        self.evidence = EvidenceGateway(RuntimeEvidencePolicy(), providers)
+        self.evidence = EvidenceGateway(policy or RuntimeEvidencePolicy(), providers)
 
     def handle(
         self,

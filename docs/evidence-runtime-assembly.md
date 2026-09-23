@@ -3,13 +3,18 @@
 The repository packages one Python image with two explicit roles: `gateway`
 and `source`. The image does not select a role implicitly. Both roles accept
 only a listen IP/port and file paths for the internal CA, Kubernetes API CA,
-certificate, private key, and projected Kubernetes token. Backend URLs,
+role certificate/private key, projected Kubernetes token, and, for the
+Gateway role only, a separate server certificate/private key. Backend URLs,
 resources, selectors, queries, repository paths, and Git references are not
 configuration inputs.
 
-The Gateway exposes the existing single staging frontend operation. It uses
-the existing TokenReview authentication, bounded SQLite replay/rate/audit
-state, policy core, and a concrete `SourceHTTPClient`. The assembled policy
+The Gateway exposes the existing single staging frontend operation over HTTPS
+only. Its server certificate must contain exactly the fixed Gateway Service
+DNS SAN, `serverAuth` EKU, and a current validity interval. The listener does
+not request a validation-client certificate: caller identity remains derived
+only through the existing TokenReview authentication. The Gateway also uses
+bounded SQLite replay/rate/audit state, policy core, and a concrete
+`SourceHTTPClient`. The assembled policy
 permits only `kubernetes_state` and `deployment_revision`; Events, logs, pod
 status, Prometheus, GitOps Contents, and all other evidence kinds fail before
 source transport calls. SQLite uses the fixed
@@ -27,6 +32,10 @@ and must have exactly the Gateway URI SAN, `clientAuth` EKU, and a current
 validity interval. There is no plaintext listener or identity-header path.
 The Gateway client verifies the configured CA, exact source DNS and URI SANs,
 `serverAuth` EKU, validity, and hostname before sending HTTP.
+The Gateway server TLS certificate/key and Gateway-to-Source client mTLS
+certificate/key are distinct required configuration paths and cannot be
+reused implicitly. Both listeners are TLS-wrapped before serving requests;
+there is no plaintext listener or fallback for either role.
 
 The Source uses a separate projected token and Kubernetes API CA. It can issue
 only three fixed GET requests: `Rollout/frontend` and

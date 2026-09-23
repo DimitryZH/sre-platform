@@ -14,7 +14,9 @@ from cryptography.x509.oid import ExtendedKeyUsageOID
 
 from ..providers import ProviderError
 from .http_clients import HTTPExecutor, HTTPResponse, TLSConnection
-from .transports import InternalMTLSValidator, PeerCertificate, SOURCE_DNS_SAN, SOURCE_URI_SAN
+from .transports import (
+    GATEWAY_DNS_SAN, InternalMTLSValidator, PeerCertificate, SOURCE_DNS_SAN, SOURCE_URI_SAN,
+)
 
 MAX_CERTIFICATE_BYTES = 64 * 1024
 MAX_RESPONSE_HEADERS = 16
@@ -60,6 +62,34 @@ def build_source_server_context(
         return context
     except Exception:
         raise ProviderError("internal TLS listener is unavailable") from None
+
+
+def build_gateway_server_context(
+    *, ca_file: str, certificate_file: str, private_key_file: str,
+    now: datetime | None = None, context_factory: Any = ssl.SSLContext,
+) -> ssl.SSLContext:
+    """HTTPS edge with server authentication; caller identity stays TokenReview-owned."""
+
+    try:
+        current = now or datetime.now(UTC)
+        identity = certificate_from_file(certificate_file)
+        InternalMTLSValidator._validate_common(identity, current)
+        if (
+            identity.dns_names != frozenset({GATEWAY_DNS_SAN})
+            or identity.uri_sans
+            or identity.extended_key_usages != frozenset({"serverAuth"})
+        ):
+            raise ValueError()
+        context = context_factory(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.verify_mode = ssl.CERT_NONE
+        context.load_verify_locations(cafile=ca_file)
+        context.load_cert_chain(certfile=certificate_file, keyfile=private_key_file)
+        if context.verify_mode != ssl.CERT_NONE:
+            raise ValueError()
+        return context
+    except Exception:
+        raise ProviderError("gateway TLS listener is unavailable") from None
 
 
 class StdlibHTTPExecutor(HTTPExecutor):

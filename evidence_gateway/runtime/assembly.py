@@ -20,7 +20,10 @@ from .http_clients import KubernetesObjectHTTPClient, KubernetesTokenReviewClien
 from .kubernetes_backends import NarrowArgoCDBackend, NarrowKubernetesBackend, UnavailableGitOpsBackend
 from .source_service import PrivateSourceService
 from .state import RuntimeState
-from .tls_runtime import StdlibHTTPExecutor, build_source_server_context, certificate_from_der, certificate_from_file
+from .tls_runtime import (
+    StdlibHTTPExecutor, build_gateway_server_context, build_source_server_context,
+    certificate_from_der, certificate_from_file,
+)
 from .transports import (
     GATEWAY_URI_SAN, InternalMTLSValidator, RuntimeUnavailableLogsProvider,
     RuntimeUnavailablePrometheusProvider,
@@ -48,6 +51,8 @@ class RuntimeConfig:
     certificate_file: str
     private_key_file: str
     projected_token_file: str
+    gateway_server_certificate_file: str | None = None
+    gateway_server_private_key_file: str | None = None
 
     def validate(self) -> None:
         try:
@@ -67,6 +72,21 @@ class RuntimeConfig:
                 path = Path(value)
                 if not isinstance(value, str) or not value or not path.is_absolute() or not path.is_file():
                     raise ValueError()
+            gateway_paths = (self.gateway_server_certificate_file, self.gateway_server_private_key_file)
+            if self.role == GATEWAY_ROLE:
+                if not all(isinstance(value, str) and value for value in gateway_paths):
+                    raise ValueError()
+                for value in gateway_paths:
+                    path = Path(value)
+                    if not path.is_absolute() or not path.is_file():
+                        raise ValueError()
+                if (
+                    Path(self.gateway_server_certificate_file).resolve() == Path(self.certificate_file).resolve()
+                    or Path(self.gateway_server_private_key_file).resolve() == Path(self.private_key_file).resolve()
+                ):
+                    raise ValueError()
+            elif any(value is not None for value in gateway_paths):
+                raise ValueError()
         except (TypeError, ValueError, OSError):
             raise RuntimeAssemblyError("runtime configuration is unavailable") from None
 
@@ -81,6 +101,8 @@ class RuntimeConfig:
         parser.add_argument("--certificate-file", required=True)
         parser.add_argument("--private-key-file", required=True)
         parser.add_argument("--projected-token-file", required=True)
+        parser.add_argument("--gateway-server-certificate-file")
+        parser.add_argument("--gateway-server-private-key-file")
         values = vars(parser.parse_args(argv))
         config = cls(**values)
         config.validate()
@@ -130,7 +152,7 @@ class SourceRevisionProvider:
 class BuiltRuntime:
     role: str
     application: RuntimeGateway | PrivateSourceService
-    server_context: ssl.SSLContext | None
+    server_context: ssl.SSLContext
     state: RuntimeState | None = None
 
     def close(self) -> None:
@@ -169,6 +191,13 @@ def build_runtime(
             SourceRevisionProvider(source, ProviderCalls()),
         )
         try:
+            gateway_server_context = build_gateway_server_context(
+                ca_file=config.internal_ca_file,
+                certificate_file=config.gateway_server_certificate_file,
+                private_key_file=config.gateway_server_private_key_file,
+                now=current,
+                context_factory=server_context_factory,
+            )
             state = RuntimeState(state_path)
             gateway = RuntimeGateway(
                 token_reviewer=KubernetesTokenReviewClient(
@@ -179,7 +208,7 @@ def build_runtime(
                 runtime_token=RuntimeTokenConfig(path=config.projected_token_file),
                 policy=RuntimeAssemblyPolicy(),
             )
-            return BuiltRuntime(GATEWAY_ROLE, gateway, None, state)
+            return BuiltRuntime(GATEWAY_ROLE, gateway, gateway_server_context, state)
         except Exception:
             if "state" in locals():
                 state.close()
@@ -209,8 +238,7 @@ def serve(config: RuntimeConfig) -> None:
         server = ThreadingHTTPServer((config.listen_address, config.listen_port), RuntimeRequestHandler)
         server.runtime = runtime  # type: ignore[attr-defined]
         server.daemon_threads = True
-        if runtime.server_context is not None:
-            server.socket = runtime.server_context.wrap_socket(server.socket, server_side=True)
+        server.socket = runtime.server_context.wrap_socket(server.socket, server_side=True)
         server.serve_forever()
     except Exception:
         raise RuntimeAssemblyError("runtime listener is unavailable") from None

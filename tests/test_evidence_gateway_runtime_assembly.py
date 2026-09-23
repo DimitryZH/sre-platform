@@ -30,7 +30,7 @@ from evidence_gateway.runtime.kubernetes_backends import APPROVED_INGRESS_API_PA
 from evidence_gateway.runtime.source_contract import SOURCE_REVISION_PATH
 from evidence_gateway.runtime.tls_runtime import certificate_from_file
 from evidence_gateway.runtime.transports import (
-    GATEWAY_URI_SAN, SOURCE_DNS_SAN, SOURCE_URI_SAN, PeerCertificate,
+    GATEWAY_DNS_SAN, GATEWAY_URI_SAN, SOURCE_DNS_SAN, SOURCE_URI_SAN, PeerCertificate,
 )
 
 
@@ -193,6 +193,9 @@ class RuntimeAssemblyTests(unittest.TestCase):
         self.gateway_cert, self.gateway_key = self.certificates.issue(
             self.directory, "gateway", uris=(GATEWAY_URI_SAN,), usages=(ExtendedKeyUsageOID.CLIENT_AUTH,),
         )
+        self.gateway_server_cert, self.gateway_server_key = self.certificates.issue(
+            self.directory, "gateway-server", dns=(GATEWAY_DNS_SAN,), usages=(ExtendedKeyUsageOID.SERVER_AUTH,),
+        )
         self.source_cert, self.source_key = self.certificates.issue(
             self.directory, "source", dns=(SOURCE_DNS_SAN,), uris=(SOURCE_URI_SAN,),
             usages=(ExtendedKeyUsageOID.SERVER_AUTH,),
@@ -214,6 +217,8 @@ class RuntimeAssemblyTests(unittest.TestCase):
             kubernetes_ca_file=str(self.certificates.kubernetes_ca_file),
             certificate_file=str(cert), private_key_file=str(key),
             projected_token_file=str(self.certificates.token_file),
+            gateway_server_certificate_file=str(self.gateway_server_cert) if role == GATEWAY_ROLE else None,
+            gateway_server_private_key_file=str(self.gateway_server_key) if role == GATEWAY_ROLE else None,
         )
 
     def source_executor(self, overrides: dict[str, bytes] | None = None) -> Executor:
@@ -252,7 +257,8 @@ class RuntimeAssemblyTests(unittest.TestCase):
         self.assertEqual(
             {item.name for item in fields(RuntimeConfig)},
             {"role", "listen_address", "listen_port", "internal_ca_file", "kubernetes_ca_file",
-             "certificate_file", "private_key_file", "projected_token_file"},
+             "certificate_file", "private_key_file", "projected_token_file",
+             "gateway_server_certificate_file", "gateway_server_private_key_file"},
         )
         self.config(GATEWAY_ROLE).validate()
         for changed in (
@@ -263,6 +269,14 @@ class RuntimeAssemblyTests(unittest.TestCase):
                 replace(self.config(GATEWAY_ROLE), **changed).validate()
         with self.assertRaises(RuntimeAssemblyError):
             replace(self.config(SOURCE_ROLE), listen_port=9443).validate()
+        with self.assertRaises(RuntimeAssemblyError):
+            replace(self.config(GATEWAY_ROLE), gateway_server_private_key_file=None).validate()
+        with self.assertRaises(RuntimeAssemblyError):
+            replace(self.config(SOURCE_ROLE), gateway_server_certificate_file=str(self.gateway_server_cert),
+                    gateway_server_private_key_file=str(self.gateway_server_key)).validate()
+        with self.assertRaises(RuntimeAssemblyError):
+            replace(self.config(GATEWAY_ROLE), gateway_server_certificate_file=str(self.gateway_cert),
+                    gateway_server_private_key_file=str(self.gateway_key)).validate()
 
         corrupted = self.directory / "corrupted.db"
         corrupted.write_bytes(b"not sqlite")
@@ -393,6 +407,56 @@ class RuntimeAssemblyTests(unittest.TestCase):
             build_runtime(self.config(GATEWAY_ROLE), executor=self.gateway_executor(),
                           state_path=str(self.directory / "bad-token.db"))
 
+    def test_gateway_server_tls_identity_fails_before_listener_creation(self) -> None:
+        wrong_certificates = [
+            self.certificates.issue(self.directory, "gateway-server-wrong-san", dns=("wrong",),
+                                    usages=(ExtendedKeyUsageOID.SERVER_AUTH,)),
+            self.certificates.issue(self.directory, "gateway-server-wrong-eku", dns=(GATEWAY_DNS_SAN,),
+                                    usages=(ExtendedKeyUsageOID.CLIENT_AUTH,)),
+            self.certificates.issue(self.directory, "gateway-server-expired", dns=(GATEWAY_DNS_SAN,),
+                                    usages=(ExtendedKeyUsageOID.SERVER_AUTH,),
+                                    not_before=self.certificates.now - timedelta(days=2),
+                                    not_after=self.certificates.now - timedelta(days=1)),
+        ]
+        malformed = self.directory / "gateway-server-malformed.pem"
+        malformed.write_text("not a certificate", encoding="ascii")
+        wrong_certificates.append((malformed, self.gateway_server_key))
+        bad_ca = self.directory / "gateway-server-bad-ca.pem"
+        bad_ca.write_text("not a CA", encoding="ascii")
+        configs = [
+            replace(self.config(GATEWAY_ROLE), gateway_server_certificate_file=str(cert),
+                    gateway_server_private_key_file=str(key))
+            for cert, key in wrong_certificates
+        ]
+        configs.extend((
+            replace(self.config(GATEWAY_ROLE), gateway_server_private_key_file=str(self.directory / "missing.key")),
+            replace(self.config(GATEWAY_ROLE), internal_ca_file=str(self.directory / "missing-ca.pem")),
+            replace(self.config(GATEWAY_ROLE), internal_ca_file=str(bad_ca)),
+        ))
+        for index, config in enumerate(configs):
+            with self.subTest(index=index), \
+                 patch("evidence_gateway.runtime.assembly.ThreadingHTTPServer") as listener, \
+                 self.assertRaises((ProviderError, RuntimeAssemblyError)):
+                serve(config)
+            listener.assert_not_called()
+
+    def test_gateway_server_tls_is_not_client_mtls_and_source_stays_mtls_required(self) -> None:
+        gateway = build_runtime(self.config(GATEWAY_ROLE), executor=self.gateway_executor(),
+                                state_path=str(self.directory / "gateway-tls.db"))
+        source = build_runtime(self.config(SOURCE_ROLE), executor=self.source_executor())
+        try:
+            self.assertEqual(gateway.server_context.verify_mode, ssl.CERT_NONE)
+            self.assertEqual(source.server_context.verify_mode, ssl.CERT_REQUIRED)
+            gateway_server_identity = certificate_from_file(str(self.gateway_server_cert))
+            gateway_client_identity = certificate_from_file(str(self.gateway_cert))
+            self.assertEqual(gateway_server_identity.dns_names, frozenset({GATEWAY_DNS_SAN}))
+            self.assertEqual(gateway_server_identity.extended_key_usages, frozenset({"serverAuth"}))
+            self.assertEqual(gateway_client_identity.uri_sans, frozenset({GATEWAY_URI_SAN}))
+            self.assertEqual(gateway_client_identity.extended_key_usages, frozenset({"clientAuth"}))
+        finally:
+            gateway.close()
+            source.close()
+
     def test_malformed_and_oversized_backend_responses_are_safe(self) -> None:
         malformed = rollout()
         malformed["metadata"]["name"] = "cart"
@@ -445,7 +509,7 @@ class RuntimeAssemblyTests(unittest.TestCase):
         self.assertNotIn("!docs", dockerignore)
         self.assertEqual(self.network.call_count, 0)
 
-    def test_role_entrypoint_wraps_only_the_source_listener_in_tls(self) -> None:
+    def test_role_entrypoint_wraps_every_listener_in_tls(self) -> None:
         class Context:
             def __init__(self):
                 self.calls = []
@@ -472,18 +536,15 @@ class RuntimeAssemblyTests(unittest.TestCase):
                 self.closed = True
 
         for role in (GATEWAY_ROLE, SOURCE_ROLE):
-            context = Context() if role == SOURCE_ROLE else None
+            context = Context()
             built = BuiltRuntime(role, object(), context)
             with patch("evidence_gateway.runtime.assembly.build_runtime", return_value=built), \
                  patch("evidence_gateway.runtime.assembly.ThreadingHTTPServer", Server):
                 serve(self.config(role))
             server = Server.instances[-1]
             self.assertTrue(server.served and server.closed)
-            if context is None:
-                self.assertNotEqual(server.socket, "tls-socket")
-            else:
-                self.assertEqual(server.socket, "tls-socket")
-                self.assertEqual(context.calls[0][1], True)
+            self.assertEqual(server.socket, "tls-socket")
+            self.assertEqual(context.calls[0][1], True)
         self.assertEqual(self.network.call_count, 0)
 
 

@@ -102,6 +102,11 @@ limits, timeouts, safe error mapping and complete runtime collection.
 open a listener, create a Kubernetes API client, or discover credentials.
 The separate runtime assembly wraps this dispatcher in the mTLS listener and
 injects the exact-object Kubernetes and Argo CD clients described above.
+The same assembly exposes the Gateway request boundary through an HTTPS-only
+listener with the fixed Gateway Service DNS identity and `serverAuth` EKU.
+That edge does not request a client certificate; caller authentication remains
+the existing TokenReview flow. Its server identity is separate from the
+Gateway `clientAuth` identity used for source-service mTLS.
 
 The `handle` boundary accepts peer facts exclusively through its separate
 trusted-transport argument. Those facts must describe the verified TLS peer
